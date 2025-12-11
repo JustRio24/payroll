@@ -78,6 +78,9 @@ export interface AppConfig {
   bpjsKetenagakerjaanRate: number; // Employee share (2% JHT)
   companyName: string;
   companyAddress: string;
+  vision?: string;
+  mission?: string;
+  history?: string;
 }
 
 // --- Constants & Seed Data ---
@@ -234,15 +237,19 @@ interface AppContextType {
   requestLeave: (data: Omit<LeaveRequest, "id" | "status" | "userId">) => void;
   updateConfig: (newConfig: Partial<AppConfig>) => void;
   approveAttendance: (id: string, status: "approved" | "rejected") => void;
+  approveLeave: (id: string, status: "approved" | "rejected") => void;
+  addPosition: (position: JobPosition) => void;
+  deletePosition: (title: string) => void;
   generatePayroll: (period: string) => void;
+  updateUser: (id: string, data: Partial<User>) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [users] = useState<User[]>(SEED_USERS);
-  const [positions] = useState<JobPosition[]>(POSITIONS);
+  const [users, setUsers] = useState<User[]>(SEED_USERS);
+  const [positions, setPositions] = useState<JobPosition[]>(POSITIONS);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(generateHistory());
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [payrolls, setPayrolls] = useState<PayrollRecord[]>([]);
@@ -256,6 +263,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     bpjsKetenagakerjaanRate: 0.02,
     companyName: "PT Panca Karya Utama",
     companyAddress: "Jl. Konstruksi No. 123, Palembang",
+    vision: "Menjadi perusahaan konstruksi terkemuka yang terpercaya.",
+    mission: "Memberikan layanan berkualitas tinggi dan mengutamakan keselamatan kerja.",
+    history: "Didirikan pada tahun 2010, PT Panca Karya Utama telah mengerjakan berbagai proyek..."
   });
 
   const login = (email: string) => {
@@ -271,6 +281,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     setUser(null);
     window.location.href = "/"; // Force redirect to login
+  };
+
+  const updateUser = (id: string, data: Partial<User>) => {
+    setUsers(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
+    if (user?.id === id) {
+      setUser(prev => prev ? { ...prev, ...data } : null);
+    }
+    toast({ title: "Profile Updated", description: "Changes saved successfully." });
   };
 
   const clockIn = async (lat: number, lng: number, photo: string) => {
@@ -353,12 +371,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     toast({ title: "Leave Requested", description: "Waiting for approval" });
   };
 
+  const approveLeave = (id: string, status: "approved" | "rejected") => {
+    setLeaves(prev => prev.map(l => l.id === id ? { ...l, status } : l));
+    toast({ title: `Leave ${status}`, description: `Request has been ${status}.` });
+  };
+
+  const addPosition = (position: JobPosition) => {
+    setPositions(prev => [...prev, position]);
+    toast({ title: "Position Added", description: `${position.title} added successfully.` });
+  };
+
+  const deletePosition = (title: string) => {
+    setPositions(prev => prev.filter(p => p.title !== title));
+    toast({ title: "Position Deleted", description: "Position removed from master data." });
+  };
+
   const updateConfig = (newConfig: Partial<AppConfig>) => {
     setConfig(prev => ({ ...prev, ...newConfig }));
+    toast({ title: "Settings Saved", description: "Configuration updated." });
   };
 
   const approveAttendance = (id: string, status: "approved" | "rejected") => {
     setAttendance(prev => prev.map(a => a.id === id ? { ...a, approvalStatus: status } : a));
+    toast({ title: `Attendance ${status}`, description: `Record has been ${status}.` });
   };
 
   // --- SIMPLE PAYROLL ENGINE ---
@@ -505,7 +540,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         requestLeave,
         updateConfig,
         approveAttendance,
-        generatePayroll
+        approveLeave,
+        addPosition,
+        deletePosition,
+        generatePayroll,
+        updateUser
       }}
     >
       {children}

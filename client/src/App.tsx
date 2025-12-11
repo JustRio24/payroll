@@ -9,10 +9,15 @@ import AuthPage from "@/pages/auth";
 import AdminDashboard from "@/pages/admin-dashboard";
 import AdminEmployees from "@/pages/admin-employees";
 import AdminAttendance from "@/pages/admin-attendance";
+import AdminLeaves from "@/pages/admin-leaves";
+import AdminSettings from "@/pages/admin-settings";
+import AdminReports from "@/pages/admin-reports";
 import PayrollList from "@/pages/payroll-list";
 import PayrollSlip from "@/pages/payroll-slip";
 import AttendanceCapture from "@/pages/attendance-capture";
 import EmployeeDashboard from "@/pages/employee-dashboard";
+import EmployeeLeave from "@/pages/employee-leave";
+import ProfilePage from "@/pages/profile";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -26,15 +31,20 @@ function Router() {
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/admin/employees" component={AdminEmployees} />
         <Route path="/admin/attendance" component={AdminAttendance} />
+        <Route path="/admin/leaves" component={AdminLeaves} />
         <Route path="/admin/payroll" component={PayrollList} />
         <Route path="/admin/payroll/:id" component={PayrollSlip} />
-        <Route path="/admin/settings" component={() => <div>Settings Page (Mock)</div>} />
+        <Route path="/admin/settings" component={AdminSettings} />
+        <Route path="/admin/reports" component={AdminReports} />
 
         {/* Employee Routes */}
         <Route path="/employee" component={EmployeeDashboard} />
         <Route path="/employee/attendance" component={AttendanceCapture} />
-        <Route path="/employee/leave" component={() => <div>Leave Request Page (Mock)</div>} />
+        <Route path="/employee/leave" component={EmployeeLeave} />
         <Route path="/employee/payslips" component={() => <div>My Payslips (Mock)</div>} />
+
+        {/* Shared */}
+        <Route path="/profile" component={ProfilePage} />
 
         {/* Fallback */}
         <Route component={NotFound} />

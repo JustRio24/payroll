@@ -37,7 +37,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { icon: LayoutDashboard, label: "Dashboard", href: "/admin" },
     { icon: Users, label: "Employees", href: "/admin/employees" },
     { icon: CalendarCheck, label: "Attendance", href: "/admin/attendance" },
+    { icon: Briefcase, label: "Leaves", href: "/admin/leaves" },
     { icon: DollarSign, label: "Payroll", href: "/admin/payroll" },
+    { icon: FileText, label: "Reports", href: "/admin/reports" },
     { icon: Settings, label: "Settings", href: "/admin/settings" },
   ] : [
     { icon: LayoutDashboard, label: "Dashboard", href: "/employee" },
@@ -78,16 +80,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </nav>
 
       <div className="p-4 border-t border-slate-800">
-        <div className="flex items-center gap-3 mb-4 px-2">
-          <Avatar className="w-8 h-8 border border-slate-700">
-            <AvatarImage src={user.avatar} />
-            <AvatarFallback className="bg-slate-700 text-xs">{user.name.charAt(0)}</AvatarFallback>
-          </Avatar>
-          <div className="flex-1 overflow-hidden">
-            <p className="text-sm font-medium truncate">{user.name}</p>
-            <p className="text-xs text-slate-400 truncate capitalize">{user.role}</p>
+        <Link href="/profile">
+          <div className="flex items-center gap-3 mb-4 px-2 cursor-pointer hover:bg-slate-800 p-2 rounded transition-colors">
+            <Avatar className="w-8 h-8 border border-slate-700">
+              <AvatarImage src={user.avatar} />
+              <AvatarFallback className="bg-slate-700 text-xs">{user.name.charAt(0)}</AvatarFallback>
+            </Avatar>
+            <div className="flex-1 overflow-hidden">
+              <p className="text-sm font-medium truncate">{user.name}</p>
+              <p className="text-xs text-slate-400 truncate capitalize">{user.role}</p>
+            </div>
+            <Settings className="w-4 h-4 text-slate-500" />
           </div>
-        </div>
+        </Link>
         <Button 
           variant="outline" 
           className="w-full justify-start gap-2 bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white"
