@@ -1,0 +1,246 @@
+Buatkan project source code lengkap (front-end + back-end + database + migrasi + seed data + dokumentasi run) untuk sistem informasi Payroll & Absensi perusahaan konstruksi bernama PT Panca Karya Utama. Spesifikasi teknis dan fungsional detail ada di bawah — ikuti seluruhnya secara ketat.
+
+1) Ringkasan singkat aplikasi
+
+Aplikasi web fullstack, responsive (desktop + tablet + mobile), desain clean minimalist. Tidak memerlukan layanan eksternal/API pihak ketiga: semua foto/berkas disimpan lokal (atau di folder penyimpanan aplikasi). Deliverable: full source code siap dijalankan (instruksi README untuk development & production), migrasi DB, script seed data, dan contoh file export laporan (PDF/Excel) yang dapat di-generate.
+
+Teknologi rekomendasi (pilih salah satu jika generator perlu keputusan):
+
+Frontend: React (Next.js) + TailwindCSS (responsive).
+
+Backend: Node.js + Express (server-side rendering ok) atau lengkap dengan API internal (tetapi user minta tanpa API publik eksternal; internal API untuk server ok).
+
+DB: SQLite (development) + optional PostgreSQL (prod).
+
+File storage: penyimpanan lokal /uploads.
+(Teknologi boleh disesuaikan oleh generator, namun deliverable harus berupa kode lengkap yang dapat dijalankan tanpa layanan cloud.)
+
+2) Lokasi kantor & geofence
+
+Koordinat kantor: Latitude = -2.9795731113284303, Longitude = 104.73111003716011.
+
+Radius geofence maksimal 100 meter dari titik kantor.
+
+Setiap aksi absensi (masuk/pulang/izin/sakit) wajib mengunggah foto bukti. Form absensi harus menampilkan koordinat (lat,long) yang dikirim karyawan, timestamp, dan status verifikasi geofence (within/outside). Lakukan validasi jarak di server juga (haversine formula).
+
+3) Role & Hak Akses
+
+Admin
+
+Dashboard ringkasan (kehadiran hari ini, jumlah lembur, gaji periode)
+
+Tentang perusahaan (visi, misi, sejarah — CRUD)
+
+Data master: CRUD Jabatan, CRUD Pegawai (akun karyawan)
+
+Validasi Absensi (approve/reject) — admin dapat menandai alasan penolakan
+
+Validasi Lembur (approve/reject) — admin memverifikasi jam lembur vs actual
+
+Input/assign bonus manual per karyawan/per periode
+
+Mengeluarkan dan mencetak Slip Gaji (PDF) per karyawan per periode (bulanan)
+
+Laporan: Export rekap absensi & payroll (PDF/Excel) per rentang tanggal atau per bulan
+
+Karyawan
+
+Dashboard ringkasan sendiri (absensi terkini, slip gaji terakhir, cuti tersisa)
+
+Update profile & password
+
+Tentang perusahaan
+
+Absen (Masuk / Pulang) — wajib upload foto & coordinates ditangkap
+
+Ajukan Izin/Tidak Masuk (upload surat bukti)
+
+Ajukan Izin Sakit (wajib upload surat dokter)
+
+Ajukan Klaim Cuti (cuti tahunan)
+
+Lihat dan unduh Slip Gaji & Riwayat absensi
+
+Akses diatur via autentikasi (email + password) dan middleware otorisasi.
+
+4) Aturan Jam Kerja, Istirahat, Denda & Lembur
+
+Jam kerja kantor: Masuk: 08:00, Pulang: 16:00.
+
+Asumsi istirahat: 1 jam makan siang tidak dibayar (praktik umum perusahaan konstruksi) → jadi jam kerja normal per hari = 7 jam. (Implementasikan dengan logika: durasi_kerja = (absen_pulang - absen_masuk) - waktu_istirahat apabila absen mencakup istirahat.)
+
+Catatan: generator membuat setting waktu_istirahat default 60 menit yang bisa dikonfigurasi oleh admin.
+
+Toleransi keterlambatan: 08:10. Jika datang setelah 08:10, denda dihitung per menit: Rp 2.000 / menit (contoh: 11 menit telat → 11×2.000).
+
+Denda muncul sebagai pengurang pada perhitungan payroll periode terkait.
+
+Lembur: dimulai setelah jam pulang (16:00). Perhitungan lembur mengikuti aturan pemerintah Indonesia:
+
+Upah per jam dasar = (gaji pokok + tunjangan tetap) / 173 (173 jam kerja efektif per bulan). 
+Gadjian
++1
+
+Tarif lembur: 1,5× upah per jam untuk jam lembur pertama, dan 2× upah per jam untuk jam lembur berikutnya. Implementasikan pembagian hari kerja vs hari libur sesuai kebutuhan. 
+Mekari Talenta
++1
+
+Perhitungan durasi kerja/hari: (absen_pulang_timestamp - absen_masuk_timestamp) - waktu_istirahat (kecualikan absen yang ditolak oleh admin).
+
+5) Perhitungan Penggajian (urutan & formula)
+
+Payroll bulanan dihitung per karyawan dengan langkah berikut:
+
+Hitung total jam kerja yang diterima (hanya absensi yang divalidasi/approved oleh admin) selama periode gaji (bulanan). Gunakan durasi_kerja_harian yang sudah dikurangi istirahat (jika ada).
+
+Upah kerja (basic) = total_jam_kerja × rate_per_jam
+
+rate_per_jam otomatis dihitung dari tabel jabatan (see seed) atau dapat diset manual oleh admin. Untuk konversi dari gaji bulanan ke rate per jam gunakan 1/173 rule bila base disimpan sebagai gaji bulanan. 
+Gadjian
+
+Upah lembur = jumlah_jam_lembur_first_hour×(1.5×rate_per_jam) + jumlah_jam_lembur_next×(2×rate_per_jam). (Hitung lembur hanya jam yang sudah divalidasi admin.)
+
+Potongan denda keterlambatan = total_menit_telat × Rp 2.000.
+
+BPJS — potongan sesuai peraturan (otomatis):
+
+BPJS Kesehatan: 5% dari upah dasar (4% ditanggung perusahaan, 1% ditanggung karyawan), batas pengenaan upah sesuai aturan (paling tinggi default Rp12.000.000). 
+Mekari Talenta
+
+BPJS Ketenagakerjaan (contoh konvensi saat ini): JHT dan JP sesuai persentase resmi (mis. JHT total ~5.7%: perusahaan 3.7% + pekerja 2%; JP employer/employee sesuai PMK/aturan aktual). Implementasikan modul iuran BPJS yang mengambil tarif dari tabel konfigurasi (yang berisi nilai default sesuai referensi) sehingga admin dapat mengubah ketika peraturan berganti. 
+BPJS Ketenagakerjaan
++1
+
+PPh 21 (Pajak Penghasilan): implementasikan perhitungan PPh 21 mengikuti PMK/Peraturan terbaru (PMK 168 / PP 58 Tahun 2023 / aturan TER jika berlaku). Gunakan tarif progresif yang berlaku dan modul yang menghitung berdasarkan penghasilan kena pajak tahunan (mengannualisasi upah bulanan), dengan mekanisme potong bulanan. Sediakan opsi untuk menggunakan metode TER (Tarif Efektif) jika perusahaan memilihnya. 
+Pajak
++1
+
+Bonus: admin dapat menambahkan bonus manual per karyawan per periode — ditambahkan ke penghasilan bruto.
+
+Gaji bersih = Upah kerja + Upah lembur + Bonus - Denda - BPJS(karyawan) - PPh21.
+
+Slip gaji harus menunjukkan rincian semua komponen (gross, potongan BPJS perusahaan, potongan karyawan, PPh21, denda, bonus, net pay) serta tanda tangan admin dan periode gaji.
+
+Sertakan unit tests / contoh perhitungan dalam README untuk memvalidasi rumus.
+
+6) Absensi & Perizinan
+
+Absen Masuk / Absen Pulang
+
+Form di mobile/desktop: capture foto (upload), ambil koordinat dari browser/device, tampilkan jarak ke kantor (m), tampilkan apakah within_geofence (<=100m) atau outside.
+
+Server memverifikasi koordinat (haversine), timestamp, dan menerima foto. Status awal = pending sampai admin validate (approve/reject).
+
+Jika posisi outside, masih simpan record tetapi beri flag dan jangan langsung hitung ke gaji sampai admin memeriksa.
+
+Izin Tidak Masuk: form upload surat izin (pdf/jpg), tanggal ketidakhadiran, alasan. Admin dapat approve/reject.
+
+Izin Sakit: wajib upload surat dokter. Admin validasi.
+
+Klaim Cuti: karyawan mengajukan cuti melalui form; cuti tahunan 12 hari setelah 12 bulan kerja berturut-turut. Cuti tidak mengurangi gaji (cuti dibayar) sesuai permintaan. Sistem harus melacak saldo cuti tiap karyawan.
+
+Riwayat & Notifikasi: email/local-notification on approval/penolakan (email optional — generator may implement local notifications only as user requested no external APIs).
+
+7) Data Master & Seed (jabatan + rate jam realistis)
+
+Buat seed data jabatan (dan contoh rate/jam yang variatif & realistis untuk industri konstruksi Indonesia). Contoh (sesuaikan nominal kalau perlu):
+
+Jabatan	Rate per jam (Rp)	Keterangan
+Kepala Proyek Manajer	75.000	
+Manajer	60.000	
+Arsitek	60.000	
+Wakil Kepala Proyek (Manager Ass.)	50.000	
+Kepala Pengawasan	45.000	
+Staff Pengawasan	35.000	
+CMO	50.000	
+Admin	30.000	
+Staff Marketing	30.000	
+OB	12.000	
+
+Buat seed 20 karyawan contoh (campuran jabatan). Masukkan tanggal mulai kerja sehingga cuti dan perhitungan JHT/masa kerja dapat diuji.
+
+8) Database schema (ringkasan)
+
+Entitas inti: users (karyawan + admin), roles, jabatan, pegawai (profil detail), absensi (type masuk/pulang, foto_path, lat, long, distance_m, status), permohonan (izin, sakit, cuti), lembur (catatan, jam_mulai, jam_selesai, status), payroll (periode, gross, potongan, net), slipgaji (pdf_path), config (bpjs_rates, pajak_config, toleransi_telat, waktu_istirahat, geofence_radius). Sertakan migration files dan seed scripts.
+
+9) UI / UX
+
+Tampilan: clean minimalist (dashboard card, table, form modal). Gunakan Tailwind CSS.
+
+Dashboard admin: ringkasan KPI, grafik rekap (absensi bulanan, jumlah lembur, total payroll bulan ini). Jika generator membuat charts, jangan pakai custom colors (atau gunakan default).
+
+Form absensi mobile-friendly: large CTA, foto preview, koordinat shown, tombol Absen Masuk / Absen Pulang.
+
+Halaman slip gaji: tampilkan breakdown, tombol Cetak PDF.
+
+Semua tabel punya fitur paging, filter (tanggal, jabatan), export Excel/PDF.
+
+10) Uploads & File handling
+
+Foto absen & dokumen disimpan di /uploads/{type}/{userId}/{timestamp}_{originalname}.
+
+Implement sanitasi file upload, limit ukuran (mis. 5MB), valid extension (jpg, png, pdf).
+
+Slip gaji dihasilkan ke /exports/slip_{userId}_{period}.pdf.
+
+11) Security & Validasi
+
+Authentication & password hashing (bcrypt).
+
+Role-based access checks on backend.
+
+Validate geolocation server-side.
+
+CSRF protection & input sanitization.
+
+Rate-limit absen endpoint to avoid spam.
+
+12) Tests & Dokumentasi
+
+Sertakan contoh unit tests (perhitungan lembur, denda, PPh sample).
+
+README berisi: cara setup (install deps), run migrations + seed, environment variables, perintah generate PDF, cara men-generate user admin default, dan contoh perhitungan payroll.
+
+13) Output yang diharapkan dari AI generator
+
+Full source code repo (struktur file), migrasi DB, seed data, sample env file, README yang jelas.
+
+Contoh data dummy 20 karyawan.
+
+File contoh export (contoh slip gaji PDF dan contoh laporan Excel).
+
+Kode yang memuat perhitungan payroll sesuai rumus di atas, dengan konfigurasi BPJS & PPh yang bisa diupdate di panel admin.
+
+Implementasi validation geofence & foto upload; tampilan koordinat di form absen.
+
+Fitur admin lengkap seperti daftar fitur di poin 3 & 6.
+
+UI clean minimalist, responsive.
+
+14) Peraturan & referensi (penting — gunakan sebagai pedoman implementasi)
+
+Upah lembur: 1.5× untuk jam lembur pertama, 2× untuk jam berikutnya; dasar per jam = 1/173 per bulan. 
+Mekari Talenta
++1
+
+PPh 21: ikuti PMK 168 Tahun 2023 / PP 58 Tahun 2023 (mekanisme TER tersedia). Implementasikan modul pajak yang realistis dan dapat dikonfigurasi. 
+Pajak
++1
+
+BPJS: tarif/komponen iuran (BPJS Kesehatan 5% (4% employer, 1% employee) dan kontribusi BPJS Ketenagakerjaan (mis. JHT 5.7% dengan pembagian 3.7% company & 2% employee) — buat table config sehingga dapat disesuaikan jika aturan berubah). 
+Mekari Talenta
++1
+
+15) Catatan & asumsi
+
+Kamu minta tanpa API eksternal — jadi gunakan server lokal untuk upload/penyimpanan & notifikasi sederhana (email optional).
+
+Asumsi istirahat 60 menit tidak dibayar (dapat diubah di config). Jika perusahaan ingin beda kebijakan, admin panel harus menyediakan pengaturan waktu_istirahat_dalam_menit.
+
+Pajak & iuran BPJS dapat berubah; sistem harus menyimpan parameter pada table config agar mudah update tanpa redeploy.
+
+16) Permintaan tambahan UX/Dev
+
+Sertakan halaman demo untuk Admin (user: admin@panca.test / pass: Admin123!) dan 5 karyawan sample (lihat seed).
+
+Buatkan script generate_sample_payroll.sh yang menjalankan full pipeline (validasi absensi sample → generate payroll → export slip PDF untuk semua karyawan sample).
