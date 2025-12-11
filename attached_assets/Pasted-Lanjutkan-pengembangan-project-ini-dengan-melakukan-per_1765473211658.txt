@@ -1,0 +1,74 @@
+Lanjutkan pengembangan project ini dengan melakukan perbaikan dan penambahan fitur berikut:
+
+1. Perbaiki Fitur Lembur
+
+Pastikan seluruh logika lembur berjalan sebagaimana mestinya.
+
+Perbaiki perhitungan durasi lembur, validasi jam masuk/keluar, serta aturan batas minimal lembur (jika ada).
+
+Pastikan lembur tersimpan di database, muncul di listing, bisa di-edit, dan bisa di-approve sesuai alur aplikasi.
+
+2. Buat Semua Data Aplikasi Menjadi Realtime
+A. Dashboard Admin
+
+Perbaiki recent activity agar benar-benar menampilkan aktivitas terbaru berdasarkan timestamp, bukan data statis atau tidak relevan.
+
+Semua data yang ditampilkan di dashboard (summary, statistik, tabel, log aktivitas) harus bersifat realtime dan mengambil data langsung dari MySQL.
+
+B. Seluruh Aplikasi
+
+Pastikan semua fitur (employee, attendance, leave, overtime, dll.) selalu mengambil data terkini dari database dan tidak menampilkan data cache atau data statis.
+
+3. Perbaiki Perhitungan Telat
+
+Pastikan perhitungan keterlambatan (late check-in) berjalan akurat.
+
+Bandingkan jam masuk karyawan dengan jam kerja yang telah dikonfigurasi di settings.
+
+Hitung total menit telat secara benar dan simpan datanya ke database.
+
+Tampilkan data keterlambatan di tempat yang relevan (dashboard, laporan, detail employee, dll.)
+
+4. Tambahkan Fitur "About Perusahaan"
+
+Tambahkan menu About Perusahaan pada kedua dashboard (Admin & Role user lainnya).
+
+Data profil perusahaan harus diambil dari Settings → Config, karena fitur edit company profile sudah tersedia di sana.
+
+Tampilkan informasi seperti:
+
+Nama perusahaan
+
+Alamat
+
+Deskripsi
+
+Email, telepon, website
+
+Logo perusahaan
+
+Pastikan tampilan rapi dan data dapat berubah secara realtime begitu diedit di Settings.
+
+5. Konsistensi Sistem
+
+Pastikan seluruh perubahan terintegrasi ke semua modul terkait.
+
+Pastikan seluruh data tetap menggunakan database MySQL lokal.
+
+Perbaiki query atau model jika ada error.
+
+Pastikan CRUD pada semua modul tetap berfungsi setelah perubahan.
+
+6. Dokumentasi
+
+Setelah selesai, berikan:
+
+Daftar file yang diubah
+
+Perubahan pada struktur database (jika ada)
+
+Penjelasan singkat mengenai logika lembur, telat, dan realtime update
+
+Petunjuk menjalankan aplikasi secara lokal
+
+Terapkan semua perbaikan ini secara terstruktur dan pastikan aplikasi berjalan stabil setelah perubahan.
