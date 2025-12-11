@@ -8,9 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { format, subMonths } from "date-fns";
 import { FileText, Download, PlayCircle } from "lucide-react";
 import { Link } from "wouter";
+import { CheckCircle } from "lucide-react";
 
 export default function PayrollList() {
-  const { payrolls, users, generatePayroll } = useApp();
+  const { payrolls, users, generatePayroll, finalizePayroll } = useApp();
   const [period, setPeriod] = useState(format(new Date(), "yyyy-MM"));
 
   const handleGenerate = () => {
@@ -93,11 +94,24 @@ export default function PayrollList() {
                        </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                       <Link href={`/admin/payroll/${payroll.id}`}>
-                         <Button variant="ghost" size="icon">
-                           <FileText className="w-4 h-4 text-slate-500" />
-                         </Button>
-                       </Link>
+                       <div className="flex justify-end gap-1">
+                         {payroll.status === 'draft' && (
+                           <Button 
+                             variant="ghost" 
+                             size="icon" 
+                             title="Finalize & Approve"
+                             className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                             onClick={() => finalizePayroll(payroll.id)}
+                           >
+                             <CheckCircle className="w-4 h-4" />
+                           </Button>
+                         )}
+                         <Link href={`/admin/payroll/${payroll.id}`}>
+                           <Button variant="ghost" size="icon" title="View Details">
+                             <FileText className="w-4 h-4 text-slate-500" />
+                           </Button>
+                         </Link>
+                       </div>
                     </TableCell>
                   </TableRow>
                 );

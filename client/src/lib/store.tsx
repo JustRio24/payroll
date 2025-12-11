@@ -242,6 +242,7 @@ interface AppContextType {
   deletePosition: (title: string) => void;
   generatePayroll: (period: string) => void;
   updateUser: (id: string, data: Partial<User>) => void;
+  finalizePayroll: (id: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -252,7 +253,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [positions, setPositions] = useState<JobPosition[]>(POSITIONS);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(generateHistory());
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
-  const [payrolls, setPayrolls] = useState<PayrollRecord[]>([]);
+  
+  // Seed some payrolls for demo
+  const [payrolls, setPayrolls] = useState<PayrollRecord[]>(() => {
+     const records: PayrollRecord[] = [];
+     const lastMonth = format(subMonths(new Date(), 1), "yyyy-MM");
+     
+     SEED_USERS.slice(1).forEach(u => {
+        const position = POSITIONS.find(p => p.title === u.position);
+        const rate = position ? position.hourlyRate : 0;
+        const basic = rate * 173; // Full month assumption
+        const net = basic * 0.95; // Rough calc
+        
+        records.push({
+           id: `pr-${u.id}-${lastMonth}`,
+           userId: u.id,
+           period: lastMonth,
+           basicSalary: basic,
+           overtimePay: 0,
+           bonus: 0,
+           deductions: { late: 0, bpjs: basic * 0.03, pph21: basic * 0.02, other: 0 },
+           totalNet: net,
+           status: "final",
+           generatedAt: new Date().toISOString()
+        });
+     });
+     return records;
+  });
+
   const [config, setConfig] = useState<AppConfig>({
     officeLat: OFFICE_LOCATION.lat,
     officeLng: OFFICE_LOCATION.lng,
@@ -290,6 +318,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     toast({ title: "Profile Updated", description: "Changes saved successfully." });
   };
+
+  const finalizePayroll = (id: string) => {
+    setPayrolls(prev => prev.map(p => p.id === id ? { ...p, status: "final" } : p));
+    toast({ title: "Payroll Finalized", description: "Status updated to Final." });
+  };
+
 
   const clockIn = async (lat: number, lng: number, photo: string) => {
     if (!user) return;
@@ -544,7 +578,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         addPosition,
         deletePosition,
         generatePayroll,
-        updateUser
+        updateUser,
+        finalizePayroll
       }}
     >
       {children}
