@@ -100,6 +100,15 @@ The system automatically detects MySQL availability and falls back to in-memory 
 3. Configure environment variables (see `MYSQL_SETUP_GUIDE.md`)
 4. Run `npm run dev`
 
+### Local Development (Windows/Mac/Linux)
+1. Clone or download the repository
+2. Run `npm install` to install dependencies
+3. For MySQL setup, follow `MYSQL_SETUP_GUIDE.md`
+4. Run `npm run dev` to start the development server
+5. Access the app at `http://localhost:5000`
+
+**Note**: The project uses `cross-env` for cross-platform environment variable support, so commands work on Windows, Mac, and Linux.
+
 ## Demo Credentials
 
 | Role | Email | Password |
