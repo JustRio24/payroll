@@ -21,7 +21,7 @@ Preferred communication style: Simple, everyday language.
 ### Frontend Architecture
 - **Framework**: React with TypeScript
 - **Routing**: Wouter for client-side routing
-- **State Management**: React Context API (`AppProvider` in `lib/store.tsx`) with local state for demo data
+- **State Management**: React Context API (`AppProvider` in `lib/store.tsx`) with API-based data fetching
 - **Data Fetching**: TanStack React Query for server state management
 - **Styling**: Tailwind CSS with shadcn/ui component library (New York style)
 - **Build Tool**: Vite with custom plugins for Replit integration
@@ -32,21 +32,22 @@ Preferred communication style: Simple, everyday language.
 - **API Pattern**: RESTful endpoints under `/api` prefix
 - **Static Serving**: Express static middleware for production builds
 
-### Data Storage
-- **ORM**: Drizzle ORM with schema defined in `shared/schema.ts`
-- **Database**: MySQL (migrated from PostgreSQL) using mysql2/promise driver
+### Data Storage (Dual Mode)
+- **Primary**: MySQL via mysql2/promise driver with Drizzle ORM
+- **Fallback**: In-memory storage (MemStorage) when MySQL not available
 - **Connection**: Connection pooling configured in `server/db.ts`
-- **Schema**: Currently defines `users` table with auto-increment IDs
+- **Schema**: Defined in `shared/schema.ts` with Drizzle tables
 
-Note: The current implementation uses in-memory mock data in the frontend store for demo purposes. The MySQL storage layer is set up but routes need to be connected.
+The system automatically detects MySQL availability and falls back to in-memory storage with demo data when MySQL is not accessible (e.g., on Replit).
 
 ### Key Design Decisions
 
 1. **Monorepo Structure**: Client (`client/`), server (`server/`), and shared code (`shared/`) in one repository with path aliases
 2. **Shared Types**: Database schemas in `shared/schema.ts` using Drizzle with Zod validation via `drizzle-zod`
 3. **Component Library**: shadcn/ui components in `client/src/components/ui/` for consistent design
-4. **Geofencing**: Office location hardcoded at coordinates (-2.9795731113284303, 104.73111003716011) with 100m radius
-5. **File Storage**: Local `/uploads` directory planned for photos and attachments (not cloud-based)
+4. **Geofencing**: Office location at coordinates (-2.9795731113284303, 104.73111003716011) with 100m radius
+5. **Dual Storage**: MySQLStorage for production (XAMPP), MemStorage for demo/development
+6. **Auto-increment IDs**: Using integers instead of UUIDs for MySQL compatibility
 
 ### Build & Development
 - Development: `npm run dev` runs tsx with the Express server
@@ -56,9 +57,10 @@ Note: The current implementation uses in-memory mock data in the frontend store 
 ## External Dependencies
 
 ### Database
-- **MySQL**: Primary database via mysql2/promise driver
+- **MySQL**: Primary database via mysql2/promise driver (for local XAMPP)
 - **Drizzle ORM**: Type-safe database operations
 - Environment variables: `DB_HOST`, `DB_USER`, `DB_PASS`, `DB_NAME`, `DB_PORT`
+- Set `USE_MEMORY_STORAGE=true` to force in-memory mode
 
 ### PDF Generation
 - **jsPDF**: Client-side PDF generation for payslips and reports
@@ -74,5 +76,33 @@ Note: The current implementation uses in-memory mock data in the frontend store 
 - **class-variance-authority**: Component variant management
 
 ### Session Management
-- **connect-pg-simple**: PostgreSQL session store (legacy, may need MySQL equivalent)
 - **express-session**: Server-side session handling
+- **memorystore**: Session storage (development)
+
+## Security Notes
+
+**IMPORTANT**: Current implementation stores passwords in plain text for demo purposes. For production use:
+1. Implement password hashing using bcrypt or similar
+2. Add HTTPS for all communications
+3. Implement proper session management with secure cookies
+4. Add rate limiting on login endpoints
+
+## Quick Start
+
+### Demo Mode (Replit/Development)
+1. Run `npm run dev`
+2. Application automatically uses in-memory storage with demo data
+3. Login with `admin@panca.test` / `password`
+
+### Production Mode (Local MySQL)
+1. Install XAMPP and start MySQL
+2. Import `database_setup.sql` via phpMyAdmin
+3. Configure environment variables (see `MYSQL_SETUP_GUIDE.md`)
+4. Run `npm run dev`
+
+## Demo Credentials
+
+| Role | Email | Password |
+|------|-------|----------|
+| Admin | admin@panca.test | password |
+| Employee | budi@panca.test | password |
