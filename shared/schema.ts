@@ -21,6 +21,26 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// ============================================
+// ACTIVITY LOGS TABLE - Realtime Activity Tracking
+// ============================================
+export const activityLogs = mysqlTable("activity_logs", {
+  id: int("id").primaryKey().autoincrement(),
+  userId: int("user_id").notNull(),
+  activityType: varchar("activity_type", { length: 50 }).notNull(),
+  description: text("description"),
+  metadata: text("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertActivityLogSchema = createInsertSchema(activityLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
+export type ActivityLog = typeof activityLogs.$inferSelect;
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -67,6 +87,8 @@ export const attendance = mysqlTable("attendance", {
   approvalStatus: varchar("approval_status", { length: 20 }).notNull().default("pending"),
   isWithinGeofenceIn: boolean("is_within_geofence_in").default(false),
   isWithinGeofenceOut: boolean("is_within_geofence_out").default(false),
+  lateMinutes: int("late_minutes").default(0),
+  overtimeMinutes: int("overtime_minutes").default(0),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
 });

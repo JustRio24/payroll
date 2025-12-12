@@ -97,6 +97,12 @@ export interface AppConfig {
   vision?: string;
   mission?: string;
   history?: string;
+  workStartTime?: string;
+  workEndTime?: string;
+  lateToleranceMinutes?: number;
+  overtimeRateFirst?: number;
+  overtimeRateNext?: number;
+  pph21Rate?: number;
 }
 
 // --- Default Config ---
@@ -112,7 +118,13 @@ const DEFAULT_CONFIG: AppConfig = {
   companyAddress: "Jl. Konstruksi No. 123, Palembang",
   vision: "Menjadi perusahaan konstruksi terkemuka yang terpercaya.",
   mission: "Memberikan layanan berkualitas tinggi dan mengutamakan keselamatan kerja.",
-  history: "Didirikan pada tahun 2010, PT Panca Karya Utama telah mengerjakan berbagai proyek..."
+  history: "Didirikan pada tahun 2010, PT Panca Karya Utama telah mengerjakan berbagai proyek...",
+  workStartTime: "08:00",
+  workEndTime: "16:00",
+  lateToleranceMinutes: 10,
+  overtimeRateFirst: 1.5,
+  overtimeRateNext: 2.0,
+  pph21Rate: 0.05,
 };
 
 // --- Utils ---
@@ -201,7 +213,7 @@ interface AppContextType {
   approveLeave: (id: number, status: "approved" | "rejected") => Promise<void>;
   addPosition: (position: JobPosition) => Promise<void>;
   deletePosition: (id: number) => Promise<void>;
-  generatePayroll: (period: string) => Promise<void>;
+  generatePayroll: (period: string, manualBonuses?: Record<number, number>) => Promise<void>;
   updateUser: (id: number, data: Partial<User>) => Promise<void>;
   finalizePayroll: (id: number) => Promise<void>;
   createUser: (data: Omit<User, "id">) => Promise<void>;
@@ -461,9 +473,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const generatePayroll = async (period: string) => {
+  const generatePayroll = async (period: string, manualBonuses?: Record<number, number>) => {
     try {
-      const response = await apiRequest('POST', '/api/payroll/generate', { period });
+      const response = await apiRequest('POST', '/api/payroll/generate', { period, manualBonuses });
       const result = await response.json();
       await fetchData();
       toast({ title: "Payroll Generated", description: `Created for ${result.payrolls?.length || 0} employees` });

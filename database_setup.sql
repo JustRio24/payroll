@@ -15,6 +15,7 @@ USE db_payroll;
 -- ============================================
 -- DROP TABLES (untuk reset jika perlu)
 -- ============================================
+DROP TABLE IF EXISTS activity_logs;
 DROP TABLE IF EXISTS payroll;
 DROP TABLE IF EXISTS leaves;
 DROP TABLE IF EXISTS attendance;
@@ -77,6 +78,8 @@ CREATE TABLE attendance (
   approval_status VARCHAR(20) NOT NULL DEFAULT 'pending',
   is_within_geofence_in BOOLEAN DEFAULT FALSE,
   is_within_geofence_out BOOLEAN DEFAULT FALSE,
+  late_minutes INT DEFAULT 0,
+  overtime_minutes INT DEFAULT 0,
   notes TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_user_id (user_id),
@@ -146,6 +149,23 @@ CREATE TABLE config (
   description VARCHAR(255),
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_key (`key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- Tabel: activity_logs
+-- Deskripsi: Log aktivitas pengguna untuk tracking realtime
+-- ============================================
+CREATE TABLE activity_logs (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  activity_type VARCHAR(50) NOT NULL,
+  description TEXT,
+  metadata TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_user_id (user_id),
+  INDEX idx_activity_type (activity_type),
+  INDEX idx_created_at (created_at),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================
@@ -291,18 +311,36 @@ INSERT INTO payroll (user_id, period, basic_salary, overtime_pay, bonus, late_de
 -- DATA DUMMY: Config (Konfigurasi Sistem)
 -- ============================================
 INSERT INTO config (`key`, value, description) VALUES
+-- Company Info
 ('companyName', 'PT Panca Karya Utama', 'Nama perusahaan'),
 ('companyAddress', 'Jl. Konstruksi No. 123, Palembang, Sumatera Selatan', 'Alamat perusahaan'),
+('companyPhone', '+62 711 123456', 'Telepon perusahaan'),
+('companyEmail', 'info@pancakaryautama.co.id', 'Email perusahaan'),
+('companyWebsite', 'www.pancakaryautama.co.id', 'Website perusahaan'),
+('vision', 'Menjadi perusahaan konstruksi terkemuka dan terpercaya di Indonesia yang mengutamakan kualitas, inovasi, dan kepuasan pelanggan.', 'Visi perusahaan'),
+('mission', 'Memberikan layanan konstruksi berkualitas tinggi dengan mengutamakan keselamatan kerja, ketepatan waktu, dan efisiensi biaya.', 'Misi perusahaan'),
+('history', 'PT Panca Karya Utama didirikan pada tahun 2010 di Palembang. Berawal dari sebuah kontraktor kecil, perusahaan telah berkembang menjadi salah satu kontraktor terkemuka di Sumatera Selatan dengan berbagai proyek besar di bidang konstruksi sipil, gedung, dan infrastruktur.', 'Sejarah perusahaan'),
+
+-- Geofence Settings
 ('officeLat', '-2.9795731113284303', 'Latitude kantor untuk geofence'),
 ('officeLng', '104.73111003716011', 'Longitude kantor untuk geofence'),
 ('geofenceRadius', '100', 'Radius geofence dalam meter'),
-('latePenaltyPerMinute', '2000', 'Potongan keterlambatan per menit (Rupiah)'),
-('breakDurationMinutes', '60', 'Durasi istirahat dalam menit'),
-('bpjsKesehatanRate', '0.01', 'Rate BPJS Kesehatan (1%)'),
-('bpjsKetenagakerjaanRate', '0.02', 'Rate BPJS Ketenagakerjaan JHT (2%)'),
-('vision', 'Menjadi perusahaan konstruksi terkemuka dan terpercaya di Indonesia yang mengutamakan kualitas, inovasi, dan kepuasan pelanggan.', 'Visi perusahaan'),
-('mission', 'Memberikan layanan konstruksi berkualitas tinggi dengan mengutamakan keselamatan kerja, ketepatan waktu, dan efisiensi biaya.', 'Misi perusahaan'),
-('history', 'PT Panca Karya Utama didirikan pada tahun 2010 di Palembang. Berawal dari sebuah kontraktor kecil, perusahaan telah berkembang menjadi salah satu kontraktor terkemuka di Sumatera Selatan dengan berbagai proyek besar di bidang konstruksi sipil, gedung, dan infrastruktur.', 'Sejarah perusahaan');
+
+-- Work Schedule Settings
+('work_start_time', '08:00', 'Jam mulai kerja (HH:MM)'),
+('work_end_time', '16:00', 'Jam selesai kerja (HH:MM)'),
+('late_tolerance_minutes', '10', 'Toleransi keterlambatan dalam menit'),
+('break_duration_minutes', '60', 'Durasi istirahat dalam menit'),
+
+-- Overtime Rates
+('overtime_rate_first_hour', '1.5', 'Multiplier lembur jam pertama'),
+('overtime_rate_next_hours', '2.0', 'Multiplier lembur jam berikutnya'),
+
+-- Deduction Rates
+('late_penalty_per_minute', '2000', 'Potongan keterlambatan per menit (Rupiah)'),
+('bpjs_kesehatan_rate', '0.01', 'Rate BPJS Kesehatan (1%)'),
+('bpjs_ketenagakerjaan_rate', '0.02', 'Rate BPJS Ketenagakerjaan JHT (2%)'),
+('pph21_rate', '0.05', 'Rate PPh 21 (5%)');
 
 -- ============================================
 -- Verifikasi data

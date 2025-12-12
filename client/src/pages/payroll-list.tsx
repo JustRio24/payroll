@@ -5,16 +5,35 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { format, subMonths } from "date-fns";
-import { FileText, Download, PlayCircle } from "lucide-react";
+import { FileText, PlayCircle, Gift } from "lucide-react";
 import { Link } from "wouter";
 import { CheckCircle } from "lucide-react";
 
 export default function PayrollList() {
   const { payrolls, users, generatePayroll, finalizePayroll } = useApp();
   const [period, setPeriod] = useState(format(new Date(), "yyyy-MM"));
+  const [showBonusDialog, setShowBonusDialog] = useState(false);
+  const [manualBonuses, setManualBonuses] = useState<Record<number, number>>({});
+
+  const handleOpenBonusDialog = () => {
+    const employees = users.filter(u => u.role !== 'admin');
+    const initial: Record<number, number> = {};
+    employees.forEach(e => { initial[e.id] = 0; });
+    setManualBonuses(initial);
+    setShowBonusDialog(true);
+  };
 
   const handleGenerate = () => {
+    generatePayroll(period, manualBonuses);
+    setShowBonusDialog(false);
+  };
+
+  const handleQuickGenerate = () => {
     generatePayroll(period);
   };
 
@@ -35,7 +54,7 @@ export default function PayrollList() {
         
         <div className="flex items-center gap-2">
            <Select value={period} onValueChange={setPeriod}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[180px]" data-testid="select-period">
               <SelectValue placeholder="Select period" />
             </SelectTrigger>
             <SelectContent>
@@ -47,7 +66,10 @@ export default function PayrollList() {
             </SelectContent>
           </Select>
           
-          <Button onClick={handleGenerate} className="bg-orange-500 hover:bg-orange-600 text-white">
+          <Button onClick={handleOpenBonusDialog} variant="outline" data-testid="button-bonus-dialog">
+            <Gift className="w-4 h-4 mr-2" /> With Bonus
+          </Button>
+          <Button onClick={handleQuickGenerate} className="bg-orange-500 hover:bg-orange-600 text-white" data-testid="button-generate-payroll">
             <PlayCircle className="w-4 h-4 mr-2" /> Generate
           </Button>
         </div>
@@ -67,6 +89,7 @@ export default function PayrollList() {
                 <TableHead>Employee</TableHead>
                 <TableHead className="text-right">Basic Salary</TableHead>
                 <TableHead className="text-right">Overtime</TableHead>
+                <TableHead className="text-right">Bonus</TableHead>
                 <TableHead className="text-right">Deductions</TableHead>
                 <TableHead className="text-right">Net Salary</TableHead>
                 <TableHead className="text-center">Status</TableHead>
@@ -79,13 +102,14 @@ export default function PayrollList() {
                 const totalDeductions = Object.values(payroll.deductions).reduce((a, b) => a + b, 0);
                 
                 return (
-                  <TableRow key={payroll.id}>
+                  <TableRow key={payroll.id} data-testid={`row-payroll-${payroll.id}`}>
                     <TableCell className="font-medium">
                        <div>{user?.name}</div>
                        <div className="text-xs text-slate-500">{user?.position}</div>
                     </TableCell>
                     <TableCell className="text-right">{formatIDR(payroll.basicSalary)}</TableCell>
                     <TableCell className="text-right text-green-600">+{formatIDR(payroll.overtimePay)}</TableCell>
+                    <TableCell className="text-right text-blue-600">{payroll.bonus > 0 ? `+${formatIDR(payroll.bonus)}` : '-'}</TableCell>
                     <TableCell className="text-right text-red-600">-{formatIDR(totalDeductions)}</TableCell>
                     <TableCell className="text-right font-bold text-slate-900">{formatIDR(payroll.totalNet)}</TableCell>
                     <TableCell className="text-center">
@@ -102,12 +126,13 @@ export default function PayrollList() {
                              title="Finalize & Approve"
                              className="text-green-600 hover:text-green-700 hover:bg-green-50"
                              onClick={() => finalizePayroll(payroll.id)}
+                             data-testid={`button-finalize-${payroll.id}`}
                            >
                              <CheckCircle className="w-4 h-4" />
                            </Button>
                          )}
                          <Link href={`/admin/payroll/${payroll.id}`}>
-                           <Button variant="ghost" size="icon" title="View Details">
+                           <Button variant="ghost" size="icon" title="View Details" data-testid={`button-view-${payroll.id}`}>
                              <FileText className="w-4 h-4 text-slate-500" />
                            </Button>
                          </Link>
@@ -118,7 +143,7 @@ export default function PayrollList() {
               })}
               {filteredPayrolls.length === 0 && (
                  <TableRow>
-                   <TableCell colSpan={7} className="text-center py-12 text-slate-400">
+                   <TableCell colSpan={8} className="text-center py-12 text-slate-400">
                       No payroll records found for this period. Click "Generate" to calculate.
                    </TableCell>
                  </TableRow>
@@ -127,6 +152,43 @@ export default function PayrollList() {
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={showBonusDialog} onOpenChange={setShowBonusDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manual Bonus Input</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-slate-500 mb-4">
+            Enter bonus amounts for each employee for {format(new Date(period + "-01"), "MMMM yyyy")}
+          </p>
+          <ScrollArea className="max-h-[300px] pr-4">
+            <div className="space-y-3">
+              {users.filter(u => u.role !== 'admin').map(emp => (
+                <div key={emp.id} className="flex items-center gap-3">
+                  <Label className="flex-1 text-sm">{emp.name}</Label>
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    className="w-32 text-right"
+                    value={manualBonuses[emp.id] || ''}
+                    onChange={e => setManualBonuses(prev => ({
+                      ...prev,
+                      [emp.id]: parseInt(e.target.value) || 0
+                    }))}
+                    data-testid={`input-bonus-${emp.id}`}
+                  />
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBonusDialog(false)}>Cancel</Button>
+            <Button onClick={handleGenerate} className="bg-orange-500 hover:bg-orange-600" data-testid="button-confirm-generate">
+              Generate Payroll
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

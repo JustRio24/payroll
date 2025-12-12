@@ -4,7 +4,8 @@ import {
   type Attendance, type InsertAttendance, attendance,
   type Leave, type InsertLeave, leaves,
   type Payroll, type InsertPayroll, payroll,
-  type Config, type InsertConfig, config
+  type Config, type InsertConfig, config,
+  type ActivityLog, type InsertActivityLog, activityLogs
 } from "@shared/schema";
 import { eq, and, like, desc, asc, sql } from "drizzle-orm";
 
@@ -50,6 +51,9 @@ export interface IStorage {
   getConfigByKey(key: string): Promise<Config | undefined>;
   setConfig(key: string, value: string, description?: string): Promise<Config>;
   deleteConfig(key: string): Promise<boolean>;
+
+  getActivityLogs(limit?: number): Promise<ActivityLog[]>;
+  createActivityLog(log: InsertActivityLog): Promise<ActivityLog>;
 }
 
 // ============================================
@@ -260,6 +264,17 @@ export class MySQLStorage implements IStorage {
     const result = await this.db.delete(config).where(eq(config.key, key));
     return result[0].affectedRows > 0;
   }
+
+  async getActivityLogs(limit: number = 50): Promise<ActivityLog[]> {
+    return await this.db.select().from(activityLogs).orderBy(desc(activityLogs.createdAt)).limit(limit);
+  }
+
+  async createActivityLog(log: InsertActivityLog): Promise<ActivityLog> {
+    const result = await this.db.insert(activityLogs).values(log);
+    const insertedId = Number(result[0].insertId);
+    const logs = await this.db.select().from(activityLogs).where(eq(activityLogs.id, insertedId)).limit(1);
+    return logs[0];
+  }
 }
 
 // ============================================
@@ -272,6 +287,7 @@ export class MemStorage implements IStorage {
   private leaves: Map<number, Leave> = new Map();
   private payrolls: Map<number, Payroll> = new Map();
   private configs: Map<string, Config> = new Map();
+  private activityLogsStore: Map<number, ActivityLog> = new Map();
   
   private nextUserId = 1;
   private nextPositionId = 1;
@@ -279,6 +295,7 @@ export class MemStorage implements IStorage {
   private nextLeaveId = 1;
   private nextPayrollId = 1;
   private nextConfigId = 1;
+  private nextActivityLogId = 1;
 
   constructor() {
     this.initDummyData();
@@ -621,6 +638,19 @@ export class MemStorage implements IStorage {
 
   async deleteConfig(key: string): Promise<boolean> {
     return this.configs.delete(key);
+  }
+
+  async getActivityLogs(limit: number = 50): Promise<ActivityLog[]> {
+    return Array.from(this.activityLogsStore.values())
+      .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
+      .slice(0, limit);
+  }
+
+  async createActivityLog(log: InsertActivityLog): Promise<ActivityLog> {
+    const id = this.nextActivityLogId++;
+    const newLog = { ...log, id, createdAt: new Date() } as ActivityLog;
+    this.activityLogsStore.set(id, newLog);
+    return newLog;
   }
 }
 

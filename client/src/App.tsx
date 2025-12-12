@@ -19,6 +19,7 @@ import EmployeeDashboard from "@/pages/employee-dashboard";
 import EmployeeLeave from "@/pages/employee-leave";
 import EmployeePayslips from "@/pages/employee-payslips";
 import ProfilePage from "@/pages/profile";
+import AboutCompany from "@/pages/about-company";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -47,6 +48,7 @@ function Router() {
 
         {/* Shared */}
         <Route path="/profile" component={ProfilePage} />
+        <Route path="/about" component={AboutCompany} />
 
         {/* Fallback */}
         <Route component={NotFound} />

@@ -1,0 +1,219 @@
+Improve this application with the following fully integrated upgrades. All features must work 100% locally using MySQL, and any database changes must also be applied to database_setup.sql so the local environment can be installed cleanly.
+
+1. Fix and Enhance the Overtime (Lembur) System
+A. Fix overtime logic so it works correctly
+
+Correct all overtime calculations so they follow actual rules:
+
+Based on normal working hours
+
+Based on actual clock-in and clock-out times
+
+Based on true overtime duration
+
+Ensure overtime is recorded accurately and appears in:
+
+Attendance recap
+
+Monthly reports
+
+Admin dashboard
+
+Employee dashboard
+
+B. Add configurable overtime settings
+
+In the Settings → Config page, add an option to configure overtime hours/thresholds.
+
+This configuration must control how overtime is calculated (to allow demo/testing).
+
+Store these configs in the database.
+
+C. Add manual bonus input during salary slip generation
+
+When admin generates a payslip for a specific employee:
+
+Add a field for “Manual Bonus”
+
+Bonus must be saved into payroll records
+
+Bonus appears in the final salary slip
+
+2. Make All Dashboard & Application Data Fully Realtime
+A. Admin Dashboard – Recent Activity
+
+Fix recent activity so it shows the actual latest activity, based on:
+
+ORDER BY created_at DESC
+
+
+Must include recent:
+
+Attendance
+
+Clock-in / Clock-out
+
+Overtime
+
+Leave/permission
+
+Employee updates
+
+Any relevant activity
+
+B. Realtime data everywhere
+
+Remove all cached, hardcoded, or stale data.
+
+All data across the entire app must always be loaded fresh from MySQL:
+
+Attendance
+
+Employee data
+
+Overtime
+
+Activity logs
+
+Settings
+
+Pay slips
+
+All updates must immediately reflect on the UI.
+
+3. Fix Late Calculation (Telat)
+
+Correct all late/early calculations:
+
+Use scheduled working hours from Settings Config
+
+Compare clock-in time vs scheduled start time
+
+Calculate actual late duration in minutes using a proper formula
+
+Save late minutes to the database
+
+Display late status consistently in:
+
+Admin dashboard
+
+Attendance recap
+
+Employee history
+
+Remove any incorrect or shifting time calculations.
+
+4. Add the “About Company” Feature
+
+Add a new “About Company” menu on:
+
+Admin dashboard
+
+Employee dashboard
+
+The page must load company profile data from the existing Settings Config:
+
+Company name
+
+Address
+
+Email
+
+Phone
+
+Website
+
+Company description
+
+Company logo
+
+Display the page neatly and responsively.
+
+5. Fix All Timezone & Time Differences (Critical)
+
+Fix the issue shown in the attached screenshots where:
+
+The time stored in database
+
+The time displayed in reports
+do not match
+
+Ensure consistent timezone handling across:
+
+MySQL
+
+Backend server
+
+Frontend/browser
+
+All timestamps must be aligned using a single timezone (preferably Asia/Jakarta).
+
+Also fix:
+
+Time formatting
+
+Time parsing
+
+Any JavaScript Date issues
+
+Any backend timezone offsets
+
+SQL timezone mismatches
+
+After fixing, all timestamps MUST appear identical between:
+
+Database records
+
+Reports
+
+Dashboard
+
+Attendance logs
+
+6. Ensure Full Local Functionality + Update Database Setup
+
+After implementing all changes:
+
+Confirm the app works 100% on a clean local environment with MySQL
+
+Update database_setup.sql with:
+
+Any new columns
+
+Modified columns
+
+New tables
+
+Index changes
+
+Default values
+
+A fresh install using this SQL file must run without errors.
+
+OUTPUT REQUIREMENTS (MANDATORY)
+
+After completing all changes, provide a detailed summary including:
+
+List of all modified files
+
+All database schema changes + updated database_setup.sql
+
+Explanation of fixes to:
+
+Overtime logic
+
+Overtime settings
+
+Manual bonus addition
+
+Realtime data improvements
+
+Recent activity correction
+
+Late calculation fix
+
+Explanation of timezone synchronization
+
+How to run the app locally without time inconsistencies
+
+Everything must be tested and confirmed working.

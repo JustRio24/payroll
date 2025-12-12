@@ -1,17 +1,45 @@
 import { useApp } from "@/lib/store";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   Users, 
   Clock, 
   AlertTriangle, 
   CalendarCheck,
-  TrendingUp
+  LogIn,
+  LogOut,
+  Calendar,
+  RefreshCw
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { format, subDays } from "date-fns";
+import { format, subDays, formatDistanceToNow } from "date-fns";
+import { id as idLocale } from "date-fns/locale";
+
+interface RecentActivity {
+  id: string;
+  type: 'clock_in' | 'clock_out' | 'leave_request';
+  userId: number;
+  userName: string;
+  description: string;
+  timestamp: string;
+  metadata?: {
+    status?: string;
+    isWithinGeofence?: boolean;
+    lateMinutes?: number;
+    overtimeMinutes?: number;
+    type?: string;
+  };
+}
 
 export default function AdminDashboard() {
   const { users, attendance, payrolls } = useApp();
+
+  const { data: recentActivity = [], isLoading: activityLoading, refetch: refetchActivity } = useQuery<RecentActivity[]>({
+    queryKey: ['/api/dashboard/recent-activity'],
+    refetchInterval: 30000,
+  });
 
   const totalEmployees = users.length - 1; // Exclude admin
   
@@ -134,34 +162,84 @@ export default function AdminDashboard() {
         </Card>
 
         <Card className="col-span-3 border-slate-200 shadow-sm">
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Latest clock-ins and outs</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                Aktivitas Terkini
+                {activityLoading && <RefreshCw className="h-4 w-4 animate-spin text-slate-400" />}
+              </CardTitle>
+              <CardDescription>Realtime clock-in, clock-out, dan cuti</CardDescription>
+            </div>
+            <button 
+              onClick={() => refetchActivity()}
+              className="p-2 rounded-md hover:bg-slate-100 transition-colors"
+              data-testid="button-refresh-activity"
+            >
+              <RefreshCw className="h-4 w-4 text-slate-500" />
+            </button>
           </CardHeader>
           <CardContent>
-            <div className="space-y-8">
-              {attendance.slice(-5).reverse().map((att) => {
-                 const user = users.find(u => u.id === att.userId);
-                 return (
-                   <div key={att.id} className="flex items-center">
-                     <div className="space-y-1">
-                       <p className="text-sm font-medium leading-none">{user?.name}</p>
-                       <p className="text-xs text-slate-500">
-                         {att.clockOut ? "Clocked Out" : "Clocked In"} at {format(new Date(att.clockOut || att.clockIn || new Date()), "HH:mm")}
-                       </p>
-                     </div>
-                     <div className={`ml-auto font-medium text-xs px-2 py-1 rounded-full ${
-                       att.isWithinGeofenceIn ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                     }`}>
-                       {att.isWithinGeofenceIn ? 'Within Zone' : 'Outside Zone'}
-                     </div>
-                   </div>
-                 );
-              })}
-              {attendance.length === 0 && (
-                <p className="text-sm text-slate-500 text-center py-4">No activity yet today.</p>
-              )}
-            </div>
+            <ScrollArea className="h-[320px] pr-4">
+              <div className="space-y-4">
+                {recentActivity.map((activity) => {
+                  const getIcon = () => {
+                    switch (activity.type) {
+                      case 'clock_in': return <LogIn className="h-4 w-4 text-green-600" />;
+                      case 'clock_out': return <LogOut className="h-4 w-4 text-blue-600" />;
+                      case 'leave_request': return <Calendar className="h-4 w-4 text-orange-600" />;
+                      default: return <Clock className="h-4 w-4 text-slate-600" />;
+                    }
+                  };
+
+                  const getStatusBadge = () => {
+                    if (activity.type === 'clock_in') {
+                      if (activity.metadata?.lateMinutes && activity.metadata.lateMinutes > 0) {
+                        return <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50">Terlambat {activity.metadata.lateMinutes}m</Badge>;
+                      }
+                      return <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">Tepat Waktu</Badge>;
+                    }
+                    if (activity.type === 'clock_out' && activity.metadata?.overtimeMinutes && activity.metadata.overtimeMinutes > 0) {
+                      const otHours = activity.metadata.overtimeMinutes / 60;
+                      const displayHours = otHours % 1 === 0 ? Math.round(otHours) : otHours.toFixed(1);
+                      return <Badge variant="outline" className="text-purple-600 border-purple-200 bg-purple-50">Lembur {displayHours}j</Badge>;
+                    }
+                    if (activity.type === 'leave_request') {
+                      return <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50">{activity.metadata?.status === 'pending' ? 'Menunggu' : activity.metadata?.status}</Badge>;
+                    }
+                    return null;
+                  };
+
+                  return (
+                    <div key={activity.id} className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors" data-testid={`activity-item-${activity.id}`}>
+                      <div className="rounded-full bg-white p-2 shadow-sm">
+                        {getIcon()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-medium text-slate-900 truncate">{activity.userName}</p>
+                          {getStatusBadge()}
+                        </div>
+                        <p className="text-xs text-slate-600 mt-0.5">
+                          {activity.description}
+                          {activity.metadata?.isWithinGeofence === false && (
+                            <span className="text-red-500 ml-1">(Di luar zona)</span>
+                          )}
+                        </p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true, locale: idLocale })}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+                {recentActivity.length === 0 && !activityLoading && (
+                  <div className="text-center py-8">
+                    <Clock className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                    <p className="text-sm text-slate-500">Belum ada aktivitas hari ini</p>
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
           </CardContent>
         </Card>
       </div>

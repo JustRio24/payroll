@@ -11,7 +11,8 @@ import {
   LogOut, 
   Menu,
   FileText,
-  Briefcase
+  Briefcase,
+  Building2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,11 +42,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { icon: DollarSign, label: "Payroll", href: "/admin/payroll" },
     { icon: FileText, label: "Reports", href: "/admin/reports" },
     { icon: Settings, label: "Settings", href: "/admin/settings" },
+    { icon: Building2, label: "About", href: "/about" },
   ] : [
     { icon: LayoutDashboard, label: "Dashboard", href: "/employee" },
     { icon: CalendarCheck, label: "My Attendance", href: "/employee/attendance" },
     { icon: Briefcase, label: "Leave Requests", href: "/employee/leave" },
     { icon: FileText, label: "My Payslips", href: "/employee/payslips" },
+    { icon: Building2, label: "About", href: "/about" },
   ];
 
   const SidebarContent = () => (
@@ -83,7 +86,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <Link href="/profile">
           <div className="flex items-center gap-3 mb-4 px-2 cursor-pointer hover:bg-slate-800 p-2 rounded transition-colors">
             <Avatar className="w-8 h-8 border border-slate-700">
-              <AvatarImage src={user.avatar} />
+              <AvatarImage src={user.avatar || undefined} />
               <AvatarFallback className="bg-slate-700 text-xs">{user.name.charAt(0)}</AvatarFallback>
             </Avatar>
             <div className="flex-1 overflow-hidden">

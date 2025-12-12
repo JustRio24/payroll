@@ -29,6 +29,13 @@ export default function AdminSettings() {
   const [bpjsKes, setBpjsKes] = useState((config.bpjsKesehatanRate * 100).toString());
   const [bpjsTk, setBpjsTk] = useState((config.bpjsKetenagakerjaanRate * 100).toString());
 
+  const [workStartTime, setWorkStartTime] = useState(config.workStartTime || "08:00");
+  const [workEndTime, setWorkEndTime] = useState(config.workEndTime || "16:00");
+  const [lateTolerance, setLateTolerance] = useState((config.lateToleranceMinutes || 10).toString());
+  const [overtimeRateFirst, setOvertimeRateFirst] = useState((config.overtimeRateFirst || 1.5).toString());
+  const [overtimeRateNext, setOvertimeRateNext] = useState((config.overtimeRateNext || 2.0).toString());
+  const [pph21Rate, setPph21Rate] = useState(((config.pph21Rate || 0.05) * 100).toString());
+
   const handleSaveCompany = () => {
     updateConfig({
        companyName,
@@ -46,7 +53,13 @@ export default function AdminSettings() {
        geofenceRadius: parseInt(radius),
        latePenaltyPerMinute: parseInt(penalty),
        bpjsKesehatanRate: parseFloat(bpjsKes) / 100,
-       bpjsKetenagakerjaanRate: parseFloat(bpjsTk) / 100
+       bpjsKetenagakerjaanRate: parseFloat(bpjsTk) / 100,
+       workStartTime,
+       workEndTime,
+       lateToleranceMinutes: parseInt(lateTolerance),
+       overtimeRateFirst: parseFloat(overtimeRateFirst),
+       overtimeRateNext: parseFloat(overtimeRateNext),
+       pph21Rate: parseFloat(pph21Rate) / 100,
     });
   };
 
@@ -148,40 +161,89 @@ export default function AdminSettings() {
         </TabsContent>
 
         <TabsContent value="system" className="space-y-4 mt-6">
-           <Card className="border-slate-200 shadow-sm">
+           <Card className="border-slate-200 shadow-sm mb-4">
              <CardHeader>
-               <CardTitle>System Configuration</CardTitle>
-               <CardDescription>Technical parameters for calculation</CardDescription>
+               <CardTitle>Jam Kerja & Lembur</CardTitle>
+               <CardDescription>Pengaturan jadwal kerja dan perhitungan lembur</CardDescription>
+             </CardHeader>
+             <CardContent className="space-y-6">
+               <div className="grid gap-6 md:grid-cols-2">
+                 <div className="space-y-2">
+                   <Label>Jam Mulai Kerja</Label>
+                   <Input type="time" value={workStartTime} onChange={e => setWorkStartTime(e.target.value)} data-testid="input-work-start" />
+                 </div>
+                 <div className="space-y-2">
+                   <Label>Jam Selesai Kerja</Label>
+                   <Input type="time" value={workEndTime} onChange={e => setWorkEndTime(e.target.value)} data-testid="input-work-end" />
+                 </div>
+                 <div className="space-y-2">
+                   <Label>Toleransi Keterlambatan (menit)</Label>
+                   <Input type="number" value={lateTolerance} onChange={e => setLateTolerance(e.target.value)} data-testid="input-late-tolerance" />
+                   <p className="text-xs text-slate-500">Tidak dihitung terlambat jika masih dalam toleransi</p>
+                 </div>
+                 <div className="space-y-2">
+                   <Label>Rate Lembur Jam Pertama (x)</Label>
+                   <Input type="number" value={overtimeRateFirst} onChange={e => setOvertimeRateFirst(e.target.value)} step="0.1" data-testid="input-ot-rate-1" />
+                   <p className="text-xs text-slate-500">Multiplier upah untuk jam pertama lembur</p>
+                 </div>
+                 <div className="space-y-2">
+                   <Label>Rate Lembur Jam Berikutnya (x)</Label>
+                   <Input type="number" value={overtimeRateNext} onChange={e => setOvertimeRateNext(e.target.value)} step="0.1" data-testid="input-ot-rate-2" />
+                   <p className="text-xs text-slate-500">Multiplier upah untuk jam kedua dst</p>
+                 </div>
+               </div>
+             </CardContent>
+           </Card>
+
+           <Card className="border-slate-200 shadow-sm mb-4">
+             <CardHeader>
+               <CardTitle>Lokasi & Geofence</CardTitle>
+               <CardDescription>Pengaturan lokasi kantor untuk validasi absensi</CardDescription>
              </CardHeader>
              <CardContent className="space-y-6">
                <div className="grid gap-6 md:grid-cols-2">
                  <div className="space-y-2">
                    <Label>Office Latitude</Label>
-                   <Input value={officeLat} onChange={e => setOfficeLat(e.target.value)} />
+                   <Input value={officeLat} onChange={e => setOfficeLat(e.target.value)} data-testid="input-office-lat" />
                  </div>
                  <div className="space-y-2">
                    <Label>Office Longitude</Label>
-                   <Input value={officeLng} onChange={e => setOfficeLng(e.target.value)} />
+                   <Input value={officeLng} onChange={e => setOfficeLng(e.target.value)} data-testid="input-office-lng" />
                  </div>
                  <div className="space-y-2">
                    <Label>Geofence Radius (meters)</Label>
-                   <Input type="number" value={radius} onChange={e => setRadius(e.target.value)} />
+                   <Input type="number" value={radius} onChange={e => setRadius(e.target.value)} data-testid="input-geofence-radius" />
+                 </div>
+               </div>
+             </CardContent>
+           </Card>
+
+           <Card className="border-slate-200 shadow-sm">
+             <CardHeader>
+               <CardTitle>Potongan & Pajak</CardTitle>
+               <CardDescription>Pengaturan perhitungan potongan gaji</CardDescription>
+             </CardHeader>
+             <CardContent className="space-y-6">
+               <div className="grid gap-6 md:grid-cols-2">
+                 <div className="space-y-2">
+                   <Label>Potongan Keterlambatan (Rp/menit)</Label>
+                   <Input type="number" value={penalty} onChange={e => setPenalty(e.target.value)} data-testid="input-late-penalty" />
                  </div>
                  <div className="space-y-2">
-                   <Label>Late Penalty (Rp/minute)</Label>
-                   <Input type="number" value={penalty} onChange={e => setPenalty(e.target.value)} />
+                   <Label>PPh 21 (%)</Label>
+                   <Input type="number" value={pph21Rate} onChange={e => setPph21Rate(e.target.value)} step="0.1" data-testid="input-pph21" />
                  </div>
                  <div className="space-y-2">
                    <Label>BPJS Kesehatan Employee Share (%)</Label>
-                   <Input type="number" value={bpjsKes} onChange={e => setBpjsKes(e.target.value)} step="0.1" />
+                   <Input type="number" value={bpjsKes} onChange={e => setBpjsKes(e.target.value)} step="0.1" data-testid="input-bpjs-kes" />
                  </div>
                  <div className="space-y-2">
                    <Label>BPJS Ketenagakerjaan Employee Share (%)</Label>
-                   <Input type="number" value={bpjsTk} onChange={e => setBpjsTk(e.target.value)} step="0.1" />
+                   <Input type="number" value={bpjsTk} onChange={e => setBpjsTk(e.target.value)} step="0.1" data-testid="input-bpjs-tk" />
                  </div>
                </div>
-               <Button onClick={handleSaveSystem} className="bg-slate-900">
-                 <Save className="w-4 h-4 mr-2" /> Update Configuration
+               <Button onClick={handleSaveSystem} className="bg-slate-900" data-testid="button-save-system">
+                 <Save className="w-4 h-4 mr-2" /> Simpan Konfigurasi
                </Button>
              </CardContent>
            </Card>
