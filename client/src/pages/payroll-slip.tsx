@@ -8,7 +8,9 @@ import { Link } from "wouter";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { format } from "date-fns";
+// Pastikan path import ini sesuai dengan struktur folder Anda
 import generatedLogo from "@assets/generated_images/minimalist_geometric_construction_logo.png";
+import signatureImg from "../assets/Signature.png"; 
 
 export default function PayrollSlip() {
   const [matchAdmin, paramsAdmin] = useRoute("/admin/payroll/:id");
@@ -27,9 +29,9 @@ export default function PayrollSlip() {
     return <div className="p-8 text-center text-slate-500">Payslip not found</div>;
   }
 
-  // Security check for employee view - only after confirming payroll exists
+  // Security check for employee view
   if (matchEmp && currentUser?.role !== 'admin' && currentUser?.id !== payroll.userId) {
-     return <div className="p-8 text-center text-red-500">Unauthorized access to this payslip.</div>;
+      return <div className="p-8 text-center text-red-500">Unauthorized access to this payslip.</div>;
   }
 
   const formatIDR = (num: number) => {
@@ -38,80 +40,146 @@ export default function PayrollSlip() {
 
   const downloadPDF = () => {
     const doc = new jsPDF();
-    
-    // Header
+
+    // --- Signature Placeholder ---
+    const signatureHRDImage = signatureImg; 
+    const signatureEmpImage = null; 
+
+    // ===================== HEADER WITH LOGO =====================
+    try {
+        doc.addImage(generatedLogo, 'PNG', 15, 15, 25, 25);
+    } catch (e) {
+        console.error("Failed to load logo:", e);
+    }
+
+    // Company Name & Address
     doc.setFontSize(18);
-    doc.text(config.companyName.toUpperCase(), 105, 20, { align: 'center' });
+    doc.setFont("helvetica", "bold");
+    doc.text(config.companyName.toUpperCase(), 45, 25); 
+
     doc.setFontSize(10);
-    doc.text(config.companyAddress, 105, 26, { align: 'center' });
-    doc.text("SLIP GAJI KARYAWAN", 105, 35, { align: 'center' });
-    doc.line(20, 38, 190, 38);
+    doc.setFont("helvetica", "normal");
+    doc.text(config.companyAddress, 45, 32);
+
+    // Title
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("EMPLOYEE PAYSLIP", 195, 25, { align: 'right' }); 
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`ID: ${payroll.id}`, 195, 32, { align: 'right' });
+
+    // Separator Line
+    doc.setLineWidth(0.5);
+    doc.line(15, 42, 195, 42); 
+    // ==============================================================
+
 
     // Employee Info
     doc.setFontSize(10);
-    doc.text(`Periode: ${format(new Date(payroll.period + "-01"), "MMMM yyyy")}`, 140, 48);
-    
+    // Note: date-fns defaults to English, so "MMMM yyyy" outputs "January 2026"
+    doc.text(`Period: ${format(new Date(payroll.period + "-01"), "MMMM yyyy")}`, 195, 50, { align: 'right' });
+
     autoTable(doc, {
-      startY: 50,
+      startY: 55,
       body: [
-        ['Nama', employee.name, 'Jabatan', employee.position || '-'],
-        ['NIK', String(employee.id), 'Status', 'Karyawan Tetap'],
+        ['Name', employee.name, 'Position', employee.position || '-'],
+        ['Employee ID', String(employee.id), 'Status', 'Permanent'], // Changed "NIK" to "Employee ID"
       ],
       theme: 'plain',
-      styles: { fontSize: 10, cellPadding: 1 },
+      styles: { fontSize: 10, cellPadding: 1.5 },
       columnStyles: { 0: { fontStyle: 'bold', cellWidth: 30 }, 2: { fontStyle: 'bold', cellWidth: 30 } }
     });
 
     // Earnings
-    doc.text("PENERIMAAN", 14, (doc as any).lastAutoTable.finalY + 10);
-    
+    doc.setFont("helvetica", "bold");
+    doc.text("EARNINGS", 14, (doc as any).lastAutoTable.finalY + 10);
+    doc.setFont("helvetica", "normal");
+
     autoTable(doc, {
       startY: (doc as any).lastAutoTable.finalY + 12,
-      head: [['Keterangan', 'Jumlah']],
+      head: [['Description', 'Amount']],
       body: [
-        ['Gaji Pokok', formatIDR(payroll.basicSalary)],
-        ['Tunjangan Lembur', formatIDR(payroll.overtimePay)],
+        ['Basic Salary', formatIDR(payroll.basicSalary)],
+        ['Overtime Pay', formatIDR(payroll.overtimePay)],
         ['Bonus', formatIDR(payroll.bonus)],
-        [{ content: 'Total Penerimaan', styles: { fontStyle: 'bold' } }, { content: formatIDR(payroll.basicSalary + payroll.overtimePay + payroll.bonus), styles: { fontStyle: 'bold' } }],
+        [{ content: 'Total Earnings', styles: { fontStyle: 'bold' } }, { content: formatIDR(payroll.basicSalary + payroll.overtimePay + payroll.bonus), styles: { fontStyle: 'bold' } }],
       ],
       theme: 'grid',
-      headStyles: { fillColor: [222, 226, 230], textColor: 20 },
+      headStyles: { fillColor: [220, 252, 231], textColor: [21, 128, 61], fontStyle: 'bold' },
       columnStyles: { 1: { halign: 'right' } }
     });
 
     // Deductions
-    doc.text("POTONGAN", 14, (doc as any).lastAutoTable.finalY + 10);
+    doc.setFont("helvetica", "bold");
+    doc.text("DEDUCTIONS", 14, (doc as any).lastAutoTable.finalY + 10);
+    doc.setFont("helvetica", "normal");
 
     autoTable(doc, {
       startY: (doc as any).lastAutoTable.finalY + 12,
-      head: [['Keterangan', 'Jumlah']],
+      head: [['Description', 'Amount']],
       body: [
-        ['BPJS Kesehatan (1%)', formatIDR(payroll.deductions.bpjs * (1/3))], // Rough estimate breakdown
-        ['BPJS Ketenagakerjaan (2%)', formatIDR(payroll.deductions.bpjs * (2/3))],
-        ['PPh 21', formatIDR(payroll.deductions.pph21)],
-        ['Denda Keterlambatan', formatIDR(payroll.deductions.late)],
-        [{ content: 'Total Potongan', styles: { fontStyle: 'bold' } }, { content: formatIDR(Object.values(payroll.deductions).reduce((a,b)=>a+b,0)), styles: { fontStyle: 'bold' } }],
+        ['Insurance (BPJS)', formatIDR(payroll.deductions.bpjs)],
+        ['Income Tax (PPh 21)', formatIDR(payroll.deductions.pph21)],
+        ['Late Penalty', formatIDR(payroll.deductions.late)],
+        [{ content: 'Total Deductions', styles: { fontStyle: 'bold' } }, { content: `(${formatIDR(Object.values(payroll.deductions).reduce((a,b)=>a+b,0))})`, styles: { fontStyle: 'bold', textColor: [220, 38, 38] } }],
       ],
       theme: 'grid',
-      headStyles: { fillColor: [222, 226, 230], textColor: 20 },
+      headStyles: { fillColor: [254, 226, 226], textColor: [185, 28, 28], fontStyle: 'bold' },
       columnStyles: { 1: { halign: 'right' } }
     });
 
-    // Net
-    const finalY = (doc as any).lastAutoTable.finalY + 10;
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.text("PENERIMAAN BERSIH (TAKE HOME PAY)", 14, finalY);
-    doc.text(formatIDR(payroll.totalNet), 195, finalY, { align: 'right' });
+    // Net Take Home Pay Box
+    const finalY = (doc as any).lastAutoTable.finalY + 15;
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(14, finalY, 182, 25, 2, 2, 'FD');
 
-    // Footer
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139);
+    doc.text("NET SALARY (TAKE HOME PAY)", 20, finalY + 10);
+
+    doc.setFontSize(16);
+    doc.setTextColor(15, 23, 42);
+    doc.setFont("helvetica", "bold");
+    doc.text(formatIDR(payroll.totalNet), 190, finalY + 16, { align: 'right' });
+    doc.setTextColor(0, 0, 0); 
+
+
+    // ===================== FOOTER WITH SIGNATURE =====================
+    const footerY = finalY + 40;
+
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text("Palembang, " + format(new Date(), "dd MMMM yyyy"), 140, finalY + 20);
-    doc.text("Dibuat Oleh,", 140, finalY + 30);
-    doc.text("( Admin HRD )", 140, finalY + 50);
+    doc.text(`Palembang, ${format(new Date(), "dd MMMM yyyy")}`, 190, footerY, { align: 'right' });
 
-    doc.save(`slip_gaji_${employee.name}_${payroll.period}.pdf`);
+    // --- Left Column (Employee) ---
+    const colKiriX = 50;
+    doc.text("Recipient,", colKiriX, footerY + 10, { align: 'center' });
+
+    if (signatureEmpImage) {
+       doc.addImage(signatureEmpImage, 'PNG', colKiriX - 15, footerY + 15, 30, 15);
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.text(`( ${employee.name} )`, colKiriX, footerY + 35, { align: 'center' });
+
+
+    // --- Right Column (HRD) ---
+    const colKananX = 150;
+    doc.setFont("helvetica", "normal");
+    doc.text("Approved by,", colKananX, footerY + 10, { align: 'center' });
+
+    if (signatureHRDImage) {
+       doc.addImage(signatureHRDImage, 'PNG', colKananX - 15, footerY + 15, 30, 15);
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.text("( HRD Manager )", colKananX, footerY + 35, { align: 'center' });
+    // ======================================================================
+
+    // Filename in English
+    doc.save(`payslip_${employee.name}_${payroll.period}.pdf`);
   };
 
   return (
@@ -123,7 +191,7 @@ export default function PayrollSlip() {
               <ArrowLeft className="w-4 h-4" />
             </Button>
           </Link>
-          <h2 className="text-2xl font-bold font-display">Slip Gaji Detail</h2>
+          <h2 className="text-2xl font-bold font-display">Payslip Detail</h2>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => window.print()}>
@@ -148,7 +216,7 @@ export default function PayrollSlip() {
               </div>
             </div>
             <div className="text-right">
-              <h2 className="text-2xl font-bold text-slate-900">SLIP GAJI</h2>
+              <h2 className="text-2xl font-bold text-slate-900">PAYSLIP</h2>
               <p className="text-slate-500 font-mono">{payroll.id}</p>
             </div>
           </div>
@@ -157,25 +225,25 @@ export default function PayrollSlip() {
           <div className="grid grid-cols-2 gap-8 text-sm">
             <div className="space-y-1">
               <div className="flex justify-between border-b border-slate-100 py-1">
-                <span className="text-slate-500">Nama Karyawan</span>
+                <span className="text-slate-500">Employee Name</span>
                 <span className="font-semibold">{employee.name}</span>
               </div>
               <div className="flex justify-between border-b border-slate-100 py-1">
-                <span className="text-slate-500">ID Karyawan</span>
+                <span className="text-slate-500">Employee ID</span>
                 <span className="font-medium">{employee.id}</span>
               </div>
               <div className="flex justify-between border-b border-slate-100 py-1">
-                <span className="text-slate-500">Jabatan</span>
+                <span className="text-slate-500">Position</span>
                 <span className="font-medium">{employee.position}</span>
               </div>
             </div>
             <div className="space-y-1">
               <div className="flex justify-between border-b border-slate-100 py-1">
-                <span className="text-slate-500">Periode</span>
+                <span className="text-slate-500">Period</span>
                 <span className="font-semibold">{format(new Date(payroll.period + "-01"), "MMMM yyyy")}</span>
               </div>
               <div className="flex justify-between border-b border-slate-100 py-1">
-                <span className="text-slate-500">Tanggal Cetak</span>
+                <span className="text-slate-500">Print Date</span>
                 <span className="font-medium">{format(new Date(), "dd MMM yyyy")}</span>
               </div>
             </div>
@@ -185,14 +253,14 @@ export default function PayrollSlip() {
           <div className="grid md:grid-cols-2 gap-12">
             {/* Earnings */}
             <div>
-              <h3 className="text-sm font-bold uppercase tracking-wider text-green-700 mb-4 border-b border-green-200 pb-2">Penerimaan</h3>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-green-700 mb-4 border-b border-green-200 pb-2">Earnings</h3>
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
-                  <span>Gaji Pokok</span>
+                  <span>Basic Salary</span>
                   <span className="font-medium">{formatIDR(payroll.basicSalary)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Tunjangan Lembur</span>
+                  <span>Overtime Pay</span>
                   <span className="font-medium">{formatIDR(payroll.overtimePay)}</span>
                 </div>
                 <div className="flex justify-between">
@@ -200,7 +268,7 @@ export default function PayrollSlip() {
                   <span className="font-medium">{formatIDR(payroll.bonus)}</span>
                 </div>
                 <div className="flex justify-between pt-3 border-t border-slate-100 font-bold text-slate-900 text-base">
-                  <span>Total Penerimaan</span>
+                  <span>Total Earnings</span>
                   <span>{formatIDR(payroll.basicSalary + payroll.overtimePay + payroll.bonus)}</span>
                 </div>
               </div>
@@ -208,22 +276,22 @@ export default function PayrollSlip() {
 
             {/* Deductions */}
             <div>
-              <h3 className="text-sm font-bold uppercase tracking-wider text-red-700 mb-4 border-b border-red-200 pb-2">Potongan</h3>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-red-700 mb-4 border-b border-red-200 pb-2">Deductions</h3>
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
-                  <span>BPJS Kesehatan & TK</span>
+                  <span>Insurance (BPJS)</span>
                   <span className="font-medium text-red-600">({formatIDR(payroll.deductions.bpjs)})</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>PPh 21</span>
+                  <span>Income Tax (PPh 21)</span>
                   <span className="font-medium text-red-600">({formatIDR(payroll.deductions.pph21)})</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Denda Keterlambatan</span>
+                  <span>Late Penalty</span>
                   <span className="font-medium text-red-600">({formatIDR(payroll.deductions.late)})</span>
                 </div>
                 <div className="flex justify-between pt-3 border-t border-slate-100 font-bold text-slate-900 text-base">
-                  <span>Total Potongan</span>
+                  <span>Total Deductions</span>
                   <span>({formatIDR(Object.values(payroll.deductions).reduce((a,b)=>a+b,0))})</span>
                 </div>
               </div>
@@ -233,8 +301,9 @@ export default function PayrollSlip() {
           {/* Net Pay */}
           <div className="bg-slate-50 p-6 rounded-lg border border-slate-200 flex justify-between items-center">
             <div>
-              <p className="text-sm text-slate-500 uppercase tracking-wide font-medium">Gaji Bersih (Take Home Pay)</p>
-              <p className="text-xs text-slate-400 mt-1">Terbilang: # Nominal Bersih #</p>
+              <p className="text-sm text-slate-500 uppercase tracking-wide font-medium">Net Salary (Take Home Pay)</p>
+              {/* Optional: You can implement a number-to-words function here later */}
+              <p className="text-xs text-slate-400 mt-1">In Words: # Net Amount #</p>
             </div>
             <div className="text-3xl font-bold text-slate-900 font-display">
               {formatIDR(payroll.totalNet)}
@@ -244,12 +313,12 @@ export default function PayrollSlip() {
           {/* Signature */}
           <div className="pt-12 grid grid-cols-2 gap-8">
             <div className="text-center">
-              <p className="text-sm text-slate-500 mb-20">Penerima,</p>
+              <p className="text-sm text-slate-500 mb-20">Recipient,</p>
               <p className="font-bold border-t border-slate-300 inline-block px-8 pt-2">{employee.name}</p>
             </div>
             <div className="text-center">
-              <p className="text-sm text-slate-500 mb-20">Mengetahui,</p>
-              <p className="font-bold border-t border-slate-300 inline-block px-8 pt-2">Manager HRD</p>
+              <p className="text-sm text-slate-500 mb-20">Approved By,</p>
+              <p className="font-bold border-t border-slate-300 inline-block px-8 pt-2">HRD Manager</p>
             </div>
           </div>
 
