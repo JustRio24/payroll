@@ -4,19 +4,20 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 // ============================================
-// USERS TABLE - Admin dan Employee
+// USERS TABLE - Admin and Employee
 // ============================================
 export const users = mysqlTable("users", {
   id: int("id").primaryKey().autoincrement(),
   name: varchar("name", { length: 255 }).notNull(),
   email: varchar("email", { length: 255 }).notNull().unique(),
   password: varchar("password", { length: 255 }).notNull(),
-  role: varchar("role", { length: 50 }).notNull().default("employee"),
+  role: varchar("role", { length: 50 }).notNull().default("employee"), // roles: admin, employee, finance
   positionId: int("position_id"),
   joinDate: date("join_date"),
   avatar: varchar("avatar", { length: 500 }),
   phone: varchar("phone", { length: 20 }),
   address: text("address"),
+  npwp: varchar("npwp", { length: 25 }),
   status: varchar("status", { length: 20 }).notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -119,7 +120,10 @@ export const leaves = mysqlTable("leaves", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertLeaveSchema = createInsertSchema(leaves).omit({
+export const insertLeaveSchema = createInsertSchema(leaves, {
+  startDate: z.string(),
+  endDate: z.string(),
+}).omit({
   id: true,
   createdAt: true,
   approvedAt: true,
@@ -127,6 +131,33 @@ export const insertLeaveSchema = createInsertSchema(leaves).omit({
 
 export type InsertLeave = z.infer<typeof insertLeaveSchema>;
 export type Leave = typeof leaves.$inferSelect;
+
+// ============================================
+// OVERTIME REQUESTS TABLE - Manual Overtime
+// ============================================
+export const overtimeRequests = mysqlTable("overtime_requests", {
+  id: int("id").primaryKey().autoincrement(),
+  userId: int("user_id").notNull(),
+  date: date("date").notNull(),
+  durationMinutes: int("duration_minutes").notNull(),
+  reason: text("reason").notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, approved, rejected
+  approvedBy: int("approved_by"),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertOvertimeRequestSchema = createInsertSchema(overtimeRequests, {
+  date: z.string(),
+}).omit({
+  id: true,
+  createdAt: true,
+  approvedAt: true,
+  approvedBy: true,
+});
+
+export type InsertOvertimeRequest = z.infer<typeof insertOvertimeRequestSchema>;
+export type OvertimeRequest = typeof overtimeRequests.$inferSelect;
 
 // ============================================
 // PAYROLL TABLE - Penggajian
@@ -160,7 +191,7 @@ export type InsertPayroll = z.infer<typeof insertPayrollSchema>;
 export type Payroll = typeof payroll.$inferSelect;
 
 // ============================================
-// CONFIG TABLE - Konfigurasi Sistem
+// CONFIG TABLE - System Configuration
 // ============================================
 export const config = mysqlTable("config", {
   id: int("id").primaryKey().autoincrement(),

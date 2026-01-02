@@ -16,6 +16,7 @@ USE db_payroll;
 -- ============================================
 -- DROP TABLES (untuk reset jika perlu)
 -- ============================================
+DROP TABLE IF EXISTS overtime_requests;
 DROP TABLE IF EXISTS activity_logs;
 DROP TABLE IF EXISTS payroll;
 DROP TABLE IF EXISTS leaves;
@@ -52,6 +53,7 @@ CREATE TABLE users (
   avatar VARCHAR(500),
   phone VARCHAR(20),
   address TEXT,
+  npwp VARCHAR(25),
   status VARCHAR(20) NOT NULL DEFAULT 'active',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_email (email),
@@ -109,6 +111,26 @@ CREATE TABLE leaves (
   INDEX idx_user_id (user_id),
   INDEX idx_status (status),
   INDEX idx_dates (start_date, end_date),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- Tabel: overtime_requests
+-- Deskripsi: Pengajuan lembur manual
+-- ============================================
+CREATE TABLE overtime_requests (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  date DATE NOT NULL,
+  duration_minutes INT NOT NULL,
+  reason TEXT NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  approved_by INT,
+  approved_at TIMESTAMP NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_user_id (user_id),
+  INDEX idx_status (status),
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -188,20 +210,22 @@ INSERT INTO positions (title, hourly_rate, description) VALUES
 -- ============================================
 -- DATA DUMMY: Users (Pengguna)
 -- ============================================
-INSERT INTO users (name, email, password, role, position_id, join_date, phone, address, status) VALUES
+INSERT INTO users (name, email, password, role, position_id, join_date, phone, address, npwp, status) VALUES
 -- Admin
-('Administrator', 'admin@panca.test', 'password', 'admin', 8, '2020-01-01', '081234567890', 'Jl. Admin No. 1, Palembang', 'active'),
+('Administrator', 'admin@panca.test', '$2b$10$yUTcV1TYokbQRn6rK5T3LuF5uvQVGVHCg2IHWlaPQpvhEf8fWlwYi', 'admin', 8, '2020-01-01', '081234567890', 'Jl. Admin No. 1, Palembang', '01.234.567.8-012.000', 'active'),
+-- Finance
+('Finance Officer', 'finance@panca.test', '$2b$10$yUTcV1TYokbQRn6rK5T3LuF5uvQVGVHCg2IHWlaPQpvhEf8fWlwYi', 'finance', 8, '2021-01-01', '081234567899', 'Jl. Finance No. 5, Palembang', '01.234.567.8-013.000', 'active'),
 -- Employees
-('Budi Santoso', 'budi@panca.test', 'password', 'employee', 1, '2021-03-15', '081234567891', 'Jl. Merdeka No. 10, Palembang', 'active'),
-('Siti Aminah', 'siti@panca.test', 'password', 'employee', 3, '2022-06-10', '081234567892', 'Jl. Pahlawan No. 25, Palembang', 'active'),
-('Rudi Hartono', 'rudi@panca.test', 'password', 'employee', 6, '2023-01-20', '081234567893', 'Jl. Sudirman No. 50, Palembang', 'active'),
-('Dewi Lestari', 'dewi@panca.test', 'password', 'employee', 9, '2023-05-05', '081234567894', 'Jl. Gatot Subroto No. 15, Palembang', 'active'),
-('Joko Anwar', 'joko@panca.test', 'password', 'employee', 10, '2023-11-01', '081234567895', 'Jl. Ahmad Yani No. 30, Palembang', 'active'),
-('Andi Wijaya', 'andi@panca.test', 'password', 'employee', 2, '2020-06-15', '081234567896', 'Jl. Diponegoro No. 42, Palembang', 'active'),
-('Rina Kusuma', 'rina@panca.test', 'password', 'employee', 4, '2021-09-01', '081234567897', 'Jl. Kartini No. 18, Palembang', 'active'),
-('Hendra Pratama', 'hendra@panca.test', 'password', 'employee', 5, '2022-02-20', '081234567898', 'Jl. Veteran No. 55, Palembang', 'active'),
-('Maya Sari', 'maya@panca.test', 'password', 'employee', 7, '2022-08-10', '081234567899', 'Jl. Jendral Ahmad Yani No. 77, Palembang', 'active'),
-('Bambang Susilo', 'bambang@panca.test', 'password', 'employee', 6, '2023-03-01', '081234567800', 'Jl. Kolonel Atmo No. 99, Palembang', 'active');
+('Budi Santoso', 'budi@panca.test', '$2b$10$yUTcV1TYokbQRn6rK5T3LuF5uvQVGVHCg2IHWlaPQpvhEf8fWlwYi', 'employee', 1, '2021-03-15', '081234567891', 'Jl. Merdeka No. 10, Palembang', '09.123.456.7-012.000', 'active'),
+('Siti Aminah', 'siti@panca.test', '$2b$10$yUTcV1TYokbQRn6rK5T3LuF5uvQVGVHCg2IHWlaPQpvhEf8fWlwYi', 'employee', 3, '2022-06-10', '081234567892', 'Jl. Pahlawan No. 25, Palembang', '09.123.456.7-013.000', 'active'),
+('Rudi Hartono', 'rudi@panca.test', '$2b$10$yUTcV1TYokbQRn6rK5T3LuF5uvQVGVHCg2IHWlaPQpvhEf8fWlwYi', 'employee', 6, '2023-01-20', '081234567893', 'Jl. Sudirman No. 50, Palembang', '09.123.456.7-014.000', 'active'),
+('Dewi Lestari', 'dewi@panca.test', '$2b$10$yUTcV1TYokbQRn6rK5T3LuF5uvQVGVHCg2IHWlaPQpvhEf8fWlwYi', 'employee', 9, '2023-05-05', '081234567894', 'Jl. Gatot Subroto No. 15, Palembang', '09.123.456.7-015.000', 'active'),
+('Joko Anwar', 'joko@panca.test', '$2b$10$yUTcV1TYokbQRn6rK5T3LuF5uvQVGVHCg2IHWlaPQpvhEf8fWlwYi', 'employee', 10, '2023-11-01', '081234567895', 'Jl. Ahmad Yani No. 30, Palembang', '09.123.456.7-016.000', 'active'),
+('Andi Wijaya', 'andi@panca.test', '$2b$10$yUTcV1TYokbQRn6rK5T3LuF5uvQVGVHCg2IHWlaPQpvhEf8fWlwYi', 'employee', 2, '2020-06-15', '081234567896', 'Jl. Diponegoro No. 42, Palembang', '09.123.456.7-017.000', 'active'),
+('Rina Kusuma', 'rina@panca.test', '$2b$10$yUTcV1TYokbQRn6rK5T3LuF5uvQVGVHCg2IHWlaPQpvhEf8fWlwYi', 'employee', 4, '2021-09-01', '081234567897', 'Jl. Kartini No. 18, Palembang', '09.123.456.7-018.000', 'active'),
+('Hendra Pratama', 'hendra@panca.test', '$2b$10$yUTcV1TYokbQRn6rK5T3LuF5uvQVGVHCg2IHWlaPQpvhEf8fWlwYi', 'employee', 5, '2022-02-20', '081234567898', 'Jl. Veteran No. 55, Palembang', '09.123.456.7-019.000', 'active'),
+('Maya Sari', 'maya@panca.test', '$2b$10$yUTcV1TYokbQRn6rK5T3LuF5uvQVGVHCg2IHWlaPQpvhEf8fWlwYi', 'employee', 7, '2022-08-10', '081234567899', 'Jl. Jendral Ahmad Yani No. 77, Palembang', '09.123.456.7-020.000', 'active'),
+('Bambang Susilo', 'bambang@panca.test', '$2b$10$yUTcV1TYokbQRn6rK5T3LuF5uvQVGVHCg2IHWlaPQpvhEf8fWlwYi', 'employee', 6, '2023-03-01', '081234567800', 'Jl. Kolonel Atmo No. 99, Palembang', '09.123.456.7-021.000', 'active');
 
 -- ============================================
 -- DATA DUMMY: Config (Konfigurasi Sistem)
@@ -450,6 +474,15 @@ INSERT INTO leaves (user_id, type, start_date, end_date, reason, status, approve
 (5, 'other', '2025-12-24', '2025-12-24', 'Menghadiri acara gereja', 'pending', NULL, NULL);
 
 -- ============================================
+-- DATA DUMMY: Overtime Requests (Lembur Manual)
+-- ============================================
+INSERT INTO overtime_requests (user_id, date, duration_minutes, reason, status, approved_by, approved_at) VALUES
+(3, '2025-12-01', 120, 'Menyelesaikan desain arsitektur gedung A', 'approved', 1, '2025-12-02 09:00:00'),
+(5, '2025-12-05', 90, 'Pengawasan cor beton malam hari', 'approved', 1, '2025-12-06 08:30:00'),
+(7, '2025-12-10', 60, 'Meeting persiapan tender proyek B', 'pending', NULL, NULL),
+(10, '2025-12-15', 180, 'Input data pemasaran akhir tahun', 'rejected', 1, '2025-12-16 10:00:00');
+
+-- ============================================
 -- PROSEDUR: Generate Payroll Data berdasarkan Attendance
 -- Formula:
 -- basic_salary = hourly_rate * total_working_hours
@@ -580,5 +613,8 @@ SELECT period, COUNT(*) AS records, SUM(total_net) AS total_gaji FROM payroll GR
 
 SELECT 'Tabel config:' AS 'Info';
 SELECT COUNT(*) AS total_config FROM config;
+
+SELECT 'Tabel overtime_requests:' AS 'Info';
+SELECT COUNT(*) AS total_overtime_requests FROM overtime_requests;
 
 SELECT 'Setup database selesai!' AS 'Status';

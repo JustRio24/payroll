@@ -7,8 +7,10 @@ import {
   insertPositionSchema, 
   insertAttendanceSchema,
   insertLeaveSchema,
-  insertPayrollSchema 
+  insertPayrollSchema,
+  insertOvertimeRequestSchema
 } from "@shared/schema";
+import bcrypt from "bcryptjs";
 
 // Error handler wrapper
 const asyncHandler = (fn: (req: Request, res: Response, next: NextFunction) => Promise<any>) => 
@@ -50,12 +52,12 @@ export async function registerRoutes(
     const user = await storage.getUserByEmail(email);
     
     if (!user) {
-      return res.status(401).json({ error: "User not found" });
+      return res.status(401).json({ error: "Invalid email or password" });
     }
 
-    // Simple password check (in production, use bcrypt)
-    if (user.password !== password) {
-      return res.status(401).json({ error: "Invalid password" });
+    const isPasswordMatch = await bcrypt.compare(password, user.password);
+    if (!isPasswordMatch) {
+      return res.status(401).json({ error: "Invalid email or password" });
     }
 
     // Return user without password
@@ -531,6 +533,72 @@ export async function registerRoutes(
   }));
 
   // ============================================
+  // OVERTIME ROUTES
+  // ============================================
+  app.get("/api/overtime", asyncHandler(async (req, res) => {
+    const { userId } = req.query;
+    
+    if (userId) {
+      const requests = await storage.getOvertimeRequestsByUser(parseInt(userId as string));
+      return res.json(requests);
+    }
+
+    const requests = await storage.getOvertimeRequests();
+    res.json(requests);
+  }));
+
+  app.get("/api/overtime/:id", asyncHandler(async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: "Invalid overtime ID" });
+    }
+
+    const request = await storage.getOvertimeRequest(id);
+    if (!request) {
+      return res.status(404).json({ error: "Overtime request not found" });
+    }
+
+    res.json(request);
+  }));
+
+  app.post("/api/overtime", asyncHandler(async (req, res) => {
+    try {
+      const validatedData = insertOvertimeRequestSchema.parse(req.body);
+      const request = await storage.createOvertimeRequest(validatedData);
+      res.status(201).json(request);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Validation failed", 
+          details: error.errors 
+        });
+      }
+      throw error;
+    }
+  }));
+
+  app.post("/api/overtime/:id/approve", asyncHandler(async (req, res) => {
+    const id = parseInt(req.params.id);
+    const { status, approvedBy } = req.body;
+    
+    if (!["approved", "rejected"].includes(status)) {
+      return res.status(400).json({ error: "Status must be 'approved' or 'rejected'" });
+    }
+
+    const request = await storage.updateOvertimeRequest(id, { 
+      status, 
+      approvedBy,
+      approvedAt: new Date(),
+    });
+
+    if (!request) {
+      return res.status(404).json({ error: "Overtime request not found" });
+    }
+
+    res.json(request);
+  }));
+
+  // ============================================
   // PAYROLL ROUTES
   // ============================================
   app.get("/api/payroll", asyncHandler(async (req, res) => {
@@ -588,15 +656,29 @@ export async function registerRoutes(
       return res.status(400).json({ error: "Valid period (YYYY-MM) required" });
     }
 
+    // Get existing payrolls to check status
+    const existingPayrolls = await storage.getPayrollsByPeriod(period);
+    const isPeriodFinalized = existingPayrolls.some(p => p.status === 'final');
+    if (isPeriodFinalized) {
+      return res.status(400).json({ error: "Cannot regenerate payroll for a finalized period" });
+    }
+
     // Delete existing drafts for this period
     await storage.deletePayrollsByPeriod(period);
 
     // Get all employees
     const users = await storage.getUsers();
-    const employees = users.filter(u => u.role !== 'admin');
+    const employees = users.filter(u => u.role === 'employee');
 
     // Get positions for hourly rates
     const positions = await storage.getPositions();
+
+    // Get all approved overtime for this period
+    const allOvertime = await storage.getOvertimeRequests();
+    const periodOvertime = allOvertime.filter(ot => {
+      const otDate = ot.date instanceof Date ? ot.date.toISOString().substring(0, 7) : String(ot.date).substring(0, 7);
+      return otDate === period && ot.status === 'approved';
+    });
 
     // Get config with defaults
     const configs = await storage.getConfigs();
@@ -646,17 +728,12 @@ export async function registerRoutes(
           ? att.date.toISOString().split('T')[0]
           : String(att.date).split('T')[0];
 
-        // Use stored late minutes if available, otherwise calculate
-        if (att.lateMinutes !== undefined && att.lateMinutes !== null) {
-          totalLateMinutes += att.lateMinutes;
-        } else {
-          // Calculate late minutes from config
-          const workStart = new Date(dateStr + 'T' + workStartTime + ':00');
-          const lateThreshold = new Date(workStart.getTime() + lateToleranceMinutes * 60000);
-          
-          if (clockIn > lateThreshold) {
-            totalLateMinutes += Math.floor((clockIn.getTime() - workStart.getTime()) / 60000);
-          }
+        // Only calculate late minutes here
+        const workStart = new Date(dateStr + 'T' + workStartTime + ':00');
+        const lateThreshold = new Date(workStart.getTime() + lateToleranceMinutes * 60000);
+        
+        if (clockIn > lateThreshold) {
+          totalLateMinutes += Math.floor((clockIn.getTime() - workStart.getTime()) / 60000);
         }
 
         // Calculate work duration
@@ -664,18 +741,11 @@ export async function registerRoutes(
         if (durationMinutes > 240) durationMinutes -= 60; // Deduct 1 hour break
         if (durationMinutes < 0) durationMinutes = 0;
         totalWorkMinutes += durationMinutes;
-
-        // Use stored overtime minutes if available, otherwise calculate
-        if (att.overtimeMinutes !== undefined && att.overtimeMinutes !== null) {
-          totalOvertimeMinutes += att.overtimeMinutes;
-        } else {
-          // Calculate overtime from config
-          const workEnd = new Date(dateStr + 'T' + workEndTime + ':00');
-          if (clockOut > workEnd) {
-            totalOvertimeMinutes += Math.floor((clockOut.getTime() - workEnd.getTime()) / 60000);
-          }
-        }
       }
+
+      // Calculate overtime from approved requests instead of clock logs
+      const empOvertime = periodOvertime.filter(ot => ot.userId === emp.id);
+      totalOvertimeMinutes = empOvertime.reduce((sum, ot) => sum + ot.durationMinutes, 0);
 
       // Calculate overtime pay using configurable rates
       const otHours = totalOvertimeMinutes / 60;
@@ -906,6 +976,7 @@ export async function registerRoutes(
     // Fallback: derive from attendance and leaves for backward compatibility
     const attendance = await storage.getAttendanceRecords();
     const leaves = await storage.getLeaves();
+    const overtime = await storage.getOvertimeRequests();
     
     const activities: any[] = [];
     
@@ -943,15 +1014,28 @@ export async function registerRoutes(
     });
 
     leaves.slice(0, 10).forEach(leave => {
-      const user = users.find(u => u.id === leave.userId);
+      const user = users.find(u => u.id === (leave.userId || (leave as any).user_id));
       activities.push({
         id: `leave-${leave.id}`,
         type: 'leave_request',
-        userId: leave.userId,
+        userId: leave.userId || (leave as any).user_id,
         userName: user?.name || 'Unknown',
         description: `Leave Request (${leave.type})`,
-        timestamp: leave.createdAt || leave.startDate,
+        timestamp: leave.createdAt || (leave as any).created_at || leave.startDate || (leave as any).start_date,
         metadata: { status: leave.status, type: leave.type }
+      });
+    });
+
+    overtime.slice(0, 10).forEach(ot => {
+      const user = users.find(u => u.id === (ot.userId || (ot as any).user_id));
+      activities.push({
+        id: `ot-${ot.id}`,
+        type: 'overtime_request',
+        userId: ot.userId || (ot as any).user_id,
+        userName: user?.name || 'Unknown',
+        description: `Overtime Request (${ot.durationMinutes || (ot as any).duration_minutes} mins)`,
+        timestamp: ot.createdAt || (ot as any).created_at || ot.date,
+        metadata: { status: ot.status, duration: ot.durationMinutes || (ot as any).duration_minutes }
       });
     });
 

@@ -3,7 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Check, X, MapPin } from "lucide-react";
+import { Check, X, MapPin, Camera, Image as ImageIcon } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
@@ -35,6 +36,7 @@ export default function AdminAttendance() {
                 <TableHead>Time In</TableHead>
                 <TableHead>Time Out</TableHead>
                 <TableHead>Location</TableHead>
+                <TableHead>Photos</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Validation</TableHead>
               </TableRow>
@@ -48,7 +50,7 @@ export default function AdminAttendance() {
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src={user?.avatar} />
+                          <AvatarImage src={user?.avatar || undefined} />
                           <AvatarFallback>{user?.name.charAt(0)}</AvatarFallback>
                         </Avatar>
                         <div>
@@ -71,6 +73,37 @@ export default function AdminAttendance() {
                            </Badge>
                          )}
                        </div>
+                    </TableCell>
+                    <TableCell>
+                        <div className="flex gap-2">
+                          {att.clockInPhoto && (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="outline" size="icon" className="h-8 w-8">
+                                  <Camera className="h-4 w-4" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-64 p-2">
+                                <p className="text-xs font-semibold mb-2 text-slate-900">Clock In Photo</p>
+                                <img src={att.clockInPhoto} alt="Clock In" className="w-full h-auto rounded shadow-sm" />
+                              </PopoverContent>
+                            </Popover>
+                          )}
+                          {att.clockOutPhoto && (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="outline" size="icon" className="h-8 w-8">
+                                  <ImageIcon className="h-4 w-4 text-slate-500" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-64 p-2">
+                                <p className="text-xs font-semibold mb-2 text-slate-900">Clock Out Photo</p>
+                                <img src={att.clockOutPhoto} alt="Clock Out" className="w-full h-auto rounded shadow-sm" />
+                              </PopoverContent>
+                            </Popover>
+                          )}
+                          {!att.clockInPhoto && !att.clockOutPhoto && <span className="text-xs text-slate-400">None</span>}
+                        </div>
                     </TableCell>
                     <TableCell>
                       <Badge className={`capitalize ${

@@ -12,7 +12,8 @@ import {
   Menu,
   FileText,
   Briefcase,
-  Building2
+  Building2,
+  Clock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,24 +34,43 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     </div>;
   }
 
+  const isFinance = user.role === "finance";
   const isAdmin = user.role === "admin";
 
-  const navItems = isAdmin ? [
-    { icon: LayoutDashboard, label: "Dashboard", href: "/admin" },
-    { icon: Users, label: "Employees", href: "/admin/employees" },
-    { icon: CalendarCheck, label: "Attendance", href: "/admin/attendance" },
-    { icon: Briefcase, label: "Leaves", href: "/admin/leaves" },
-    { icon: DollarSign, label: "Payroll", href: "/admin/payroll" },
-    { icon: FileText, label: "Reports", href: "/admin/reports" },
-    { icon: Settings, label: "Settings", href: "/admin/settings" },
-    { icon: Building2, label: "About", href: "/about" },
-  ] : [
-    { icon: LayoutDashboard, label: "Dashboard", href: "/employee" },
-    { icon: CalendarCheck, label: "My Attendance", href: "/employee/attendance" },
-    { icon: Briefcase, label: "Leave Requests", href: "/employee/leave" },
-    { icon: FileText, label: "My Payslips", href: "/employee/payslips" },
-    { icon: Building2, label: "About", href: "/about" },
-  ];
+  let navItems = [];
+  
+  if (isAdmin) {
+    navItems = [
+      { icon: LayoutDashboard, label: "Dashboard", href: "/admin" },
+      { icon: Users, label: "Employees", href: "/admin/employees" },
+      { icon: CalendarCheck, label: "Attendance", href: "/admin/attendance" },
+      { icon: Clock, label: "Overtime Requests", href: "/admin/overtime" },
+      { icon: Briefcase, label: "Leaves", href: "/admin/leaves" },
+      { icon: DollarSign, label: "Payroll", href: "/admin/payroll" },
+      { icon: FileText, label: "Reports", href: "/admin/reports" },
+      { icon: Settings, label: "Settings", href: "/admin/settings" },
+      { icon: Building2, label: "About", href: "/about" },
+    ];
+  } else if (isFinance) {
+    navItems = [
+      { icon: LayoutDashboard, label: "Finance Dashboard", href: "/finance" },
+      { icon: DollarSign, label: "Manage Payroll", href: "/admin/payroll" },
+      { icon: Clock, label: "Overtime Approval", href: "/admin/overtime" },
+      { icon: Briefcase, label: "Leaves Review", href: "/admin/leaves" },
+      { icon: CalendarCheck, label: "Attendance Log", href: "/admin/attendance" },
+      { icon: FileText, label: "Financial Reports", href: "/admin/reports" },
+      { icon: Building2, label: "About Company", href: "/about" },
+    ];
+  } else {
+    navItems = [
+      { icon: LayoutDashboard, label: "Dashboard", href: "/employee" },
+      { icon: CalendarCheck, label: "My Attendance", href: "/employee/attendance" },
+      { icon: Clock, label: "Request Overtime", href: "/employee/overtime" },
+      { icon: Briefcase, label: "Leave Requests", href: "/employee/leave" },
+      { icon: FileText, label: "My Payslips", href: "/employee/payslips" },
+      { icon: Building2, label: "About", href: "/about" },
+    ];
+  }
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-slate-900 text-slate-100">

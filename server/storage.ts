@@ -5,9 +5,11 @@ import {
   type Leave, type InsertLeave, leaves,
   type Payroll, type InsertPayroll, payroll,
   type Config, type InsertConfig, config,
-  type ActivityLog, type InsertActivityLog, activityLogs
+  type ActivityLog, type InsertActivityLog, activityLogs,
+  type OvertimeRequest, type InsertOvertimeRequest, overtimeRequests
 } from "@shared/schema";
 import { eq, and, like, desc, asc, sql } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 
 export interface IStorage {
   getUsers(): Promise<User[]>;
@@ -35,7 +37,7 @@ export interface IStorage {
   getLeavesByUser(userId: number): Promise<Leave[]>;
   getLeave(id: number): Promise<Leave | undefined>;
   createLeave(leave: InsertLeave): Promise<Leave>;
-  updateLeave(id: number, leave: Partial<InsertLeave>): Promise<Leave | undefined>;
+  updateLeave(id: number, leave: Partial<Leave>): Promise<Leave | undefined>;
   deleteLeave(id: number): Promise<boolean>;
 
   getPayrolls(): Promise<Payroll[]>;
@@ -54,6 +56,13 @@ export interface IStorage {
 
   getActivityLogs(limit?: number): Promise<ActivityLog[]>;
   createActivityLog(log: InsertActivityLog): Promise<ActivityLog>;
+
+  getOvertimeRequests(): Promise<OvertimeRequest[]>;
+  getOvertimeRequestsByUser(userId: number): Promise<OvertimeRequest[]>;
+  getOvertimeRequest(id: number): Promise<OvertimeRequest | undefined>;
+  createOvertimeRequest(request: InsertOvertimeRequest): Promise<OvertimeRequest>;
+  updateOvertimeRequest(id: number, request: Partial<OvertimeRequest>): Promise<OvertimeRequest | undefined>;
+  deleteOvertimeRequest(id: number): Promise<boolean>;
 }
 
 // ============================================
@@ -81,7 +90,8 @@ export class MySQLStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const result = await this.db.insert(users).values(insertUser);
+    const hashedPassword = await bcrypt.hash(insertUser.password, 10);
+    const result = await this.db.insert(users).values({ ...insertUser, password: hashedPassword });
     const insertedId = Number(result[0].insertId);
     const user = await this.getUser(insertedId);
     if (!user) throw new Error("Failed to create user");
@@ -89,7 +99,11 @@ export class MySQLStorage implements IStorage {
   }
 
   async updateUser(id: number, userData: Partial<InsertUser>): Promise<User | undefined> {
-    await this.db.update(users).set(userData).where(eq(users.id, id));
+    const updateData = { ...userData };
+    if (updateData.password) {
+      updateData.password = await bcrypt.hash(updateData.password, 10);
+    }
+    await this.db.update(users).set(updateData).where(eq(users.id, id));
     return await this.getUser(id);
   }
 
@@ -186,7 +200,7 @@ export class MySQLStorage implements IStorage {
     return lv;
   }
 
-  async updateLeave(id: number, leaveData: Partial<InsertLeave>): Promise<Leave | undefined> {
+  async updateLeave(id: number, leaveData: Partial<Leave>): Promise<Leave | undefined> {
     await this.db.update(leaves).set(leaveData).where(eq(leaves.id, id));
     return await this.getLeave(id);
   }
@@ -275,6 +289,39 @@ export class MySQLStorage implements IStorage {
     const logs = await this.db.select().from(activityLogs).where(eq(activityLogs.id, insertedId)).limit(1);
     return logs[0];
   }
+
+  async getOvertimeRequests(): Promise<OvertimeRequest[]> {
+    return await this.db.select().from(overtimeRequests).orderBy(desc(overtimeRequests.date));
+  }
+
+  async getOvertimeRequestsByUser(userId: number): Promise<OvertimeRequest[]> {
+    return await this.db.select().from(overtimeRequests)
+      .where(eq(overtimeRequests.userId, userId))
+      .orderBy(desc(overtimeRequests.date));
+  }
+
+  async getOvertimeRequest(id: number): Promise<OvertimeRequest | undefined> {
+    const result = await this.db.select().from(overtimeRequests).where(eq(overtimeRequests.id, id)).limit(1);
+    return result[0];
+  }
+
+  async createOvertimeRequest(request: InsertOvertimeRequest): Promise<OvertimeRequest> {
+    const result = await this.db.insert(overtimeRequests).values(request);
+    const insertedId = Number(result[0].insertId);
+    const req = await this.getOvertimeRequest(insertedId);
+    if (!req) throw new Error("Failed to create overtime request");
+    return req;
+  }
+
+  async updateOvertimeRequest(id: number, requestData: Partial<OvertimeRequest>): Promise<OvertimeRequest | undefined> {
+    await this.db.update(overtimeRequests).set(requestData).where(eq(overtimeRequests.id, id));
+    return await this.getOvertimeRequest(id);
+  }
+
+  async deleteOvertimeRequest(id: number): Promise<boolean> {
+    const result = await this.db.delete(overtimeRequests).where(eq(overtimeRequests.id, id));
+    return result[0].affectedRows > 0;
+  }
 }
 
 // ============================================
@@ -288,6 +335,7 @@ export class MemStorage implements IStorage {
   private payrolls: Map<number, Payroll> = new Map();
   private configs: Map<string, Config> = new Map();
   private activityLogsStore: Map<number, ActivityLog> = new Map();
+  private overtimeRequestsStore: Map<number, OvertimeRequest> = new Map();
   
   private nextUserId = 1;
   private nextPositionId = 1;
@@ -296,6 +344,7 @@ export class MemStorage implements IStorage {
   private nextPayrollId = 1;
   private nextConfigId = 1;
   private nextActivityLogId = 1;
+  private nextOvertimeRequestId = 1;
 
   constructor() {
     this.initDummyData();
@@ -303,16 +352,17 @@ export class MemStorage implements IStorage {
 
   private initDummyData() {
     const positionsData: InsertPosition[] = [
-      { title: 'Kepala Proyek Manajer', hourlyRate: 75000, description: 'Manajer proyek konstruksi senior' },
-      { title: 'Manajer', hourlyRate: 60000, description: 'Manajer divisi' },
-      { title: 'Arsitek', hourlyRate: 60000, description: 'Desain dan perencanaan bangunan' },
-      { title: 'Wakil Kepala Proyek', hourlyRate: 50000, description: 'Asisten kepala proyek' },
-      { title: 'Kepala Pengawasan', hourlyRate: 45000, description: 'Kepala tim pengawasan lapangan' },
-      { title: 'Staff Pengawasan', hourlyRate: 35000, description: 'Staff pengawasan lapangan' },
+      { title: 'Project Manager', hourlyRate: 75000, description: 'Senior construction project manager' },
+      { title: 'Division Manager', hourlyRate: 60000, description: 'Division-level manager' },
+      { title: 'Architect', hourlyRate: 60000, description: 'Building design and planning' },
+      { title: 'Deputy Project Manager', hourlyRate: 50000, description: 'Assistant project manager' },
+      { title: 'Chief Supervisor', hourlyRate: 45000, description: 'Head of field supervision team' },
+      { title: 'Field Supervisor', hourlyRate: 35000, description: 'Field supervision staff' },
       { title: 'CMO', hourlyRate: 50000, description: 'Chief Marketing Officer' },
-      { title: 'Admin', hourlyRate: 30000, description: 'Staff administrasi' },
-      { title: 'Staff Marketing', hourlyRate: 30000, description: 'Staff pemasaran' },
-      { title: 'OB', hourlyRate: 12000, description: 'Office Boy' },
+      { title: 'Admin', hourlyRate: 30000, description: 'Administrative staff' },
+      { title: 'Finance Officer', hourlyRate: 35000, description: 'Financial management staff' },
+      { title: 'Marketing Staff', hourlyRate: 30000, description: 'Marketing and sales staff' },
+      { title: 'Office Assistant', hourlyRate: 15000, description: 'Office maintenance and support' },
     ];
 
     positionsData.forEach(p => {
@@ -321,17 +371,17 @@ export class MemStorage implements IStorage {
     });
 
     const usersData = [
-      { name: 'Administrator', email: 'admin@panca.test', password: 'password', role: 'admin', positionId: 8, joinDate: new Date('2020-01-01'), phone: '081234567890', address: 'Jl. Admin No. 1, Palembang', status: 'active', avatar: null, createdAt: new Date() },
-      { name: 'Budi Santoso', email: 'budi@panca.test', password: 'password', role: 'employee', positionId: 1, joinDate: new Date('2021-03-15'), phone: '081234567891', address: 'Jl. Merdeka No. 10, Palembang', status: 'active', avatar: null, createdAt: new Date() },
-      { name: 'Siti Aminah', email: 'siti@panca.test', password: 'password', role: 'employee', positionId: 3, joinDate: new Date('2022-06-10'), phone: '081234567892', address: 'Jl. Pahlawan No. 25, Palembang', status: 'active', avatar: null, createdAt: new Date() },
-      { name: 'Rudi Hartono', email: 'rudi@panca.test', password: 'password', role: 'employee', positionId: 6, joinDate: new Date('2023-01-20'), phone: '081234567893', address: 'Jl. Sudirman No. 50, Palembang', status: 'active', avatar: null, createdAt: new Date() },
-      { name: 'Dewi Lestari', email: 'dewi@panca.test', password: 'password', role: 'employee', positionId: 9, joinDate: new Date('2023-05-05'), phone: '081234567894', address: 'Jl. Gatot Subroto No. 15, Palembang', status: 'active', avatar: null, createdAt: new Date() },
-      { name: 'Joko Anwar', email: 'joko@panca.test', password: 'password', role: 'employee', positionId: 10, joinDate: new Date('2023-11-01'), phone: '081234567895', address: 'Jl. Ahmad Yani No. 30, Palembang', status: 'active', avatar: null, createdAt: new Date() },
-      { name: 'Andi Wijaya', email: 'andi@panca.test', password: 'password', role: 'employee', positionId: 2, joinDate: new Date('2020-06-15'), phone: '081234567896', address: 'Jl. Diponegoro No. 42, Palembang', status: 'active', avatar: null, createdAt: new Date() },
-      { name: 'Rina Kusuma', email: 'rina@panca.test', password: 'password', role: 'employee', positionId: 4, joinDate: new Date('2021-09-01'), phone: '081234567897', address: 'Jl. Kartini No. 18, Palembang', status: 'active', avatar: null, createdAt: new Date() },
-      { name: 'Hendra Pratama', email: 'hendra@panca.test', password: 'password', role: 'employee', positionId: 5, joinDate: new Date('2022-02-20'), phone: '081234567898', address: 'Jl. Veteran No. 55, Palembang', status: 'active', avatar: null, createdAt: new Date() },
-      { name: 'Maya Sari', email: 'maya@panca.test', password: 'password', role: 'employee', positionId: 7, joinDate: new Date('2022-08-10'), phone: '081234567899', address: 'Jl. Jendral Ahmad Yani No. 77, Palembang', status: 'active', avatar: null, createdAt: new Date() },
-      { name: 'Bambang Susilo', email: 'bambang@panca.test', password: 'password', role: 'employee', positionId: 6, joinDate: new Date('2023-03-01'), phone: '081234567800', address: 'Jl. Kolonel Atmo No. 99, Palembang', status: 'active', avatar: null, createdAt: new Date() },
+      { name: 'Administrator', email: 'admin@panca.test', password: 'password', role: 'admin', positionId: 8, joinDate: new Date('2020-01-01'), phone: '081234567890', address: '1 Admin St, Palembang', status: 'active', avatar: null, createdAt: new Date() },
+      { name: 'Budi Santoso', email: 'budi@panca.test', password: 'password', role: 'employee', positionId: 1, joinDate: new Date('2021-03-15'), phone: '081234567891', address: '10 Merdeka St, Palembang', status: 'active', avatar: null, createdAt: new Date() },
+      { name: 'Siti Aminah', email: 'siti@panca.test', password: 'password', role: 'employee', positionId: 3, joinDate: new Date('2022-06-10'), phone: '081234567892', address: '25 Pahlawan St, Palembang', status: 'active', avatar: null, createdAt: new Date() },
+      { name: 'Rudi Hartono', email: 'rudi@panca.test', password: 'password', role: 'employee', positionId: 6, joinDate: new Date('2023-01-20'), phone: '081234567893', address: '50 Sudirman St, Palembang', status: 'active', avatar: null, createdAt: new Date() },
+      { name: 'Dewi Lestari', email: 'dewi@panca.test', password: 'password', role: 'employee', positionId: 10, joinDate: new Date('2023-05-05'), phone: '081234567894', address: '15 Gatot Subroto St, Palembang', status: 'active', avatar: null, createdAt: new Date() },
+      { name: 'Joko Anwar', email: 'joko@panca.test', password: 'password', role: 'employee', positionId: 11, joinDate: new Date('2023-11-01'), phone: '081234567895', address: '30 Ahmad Yani St, Palembang', status: 'active', avatar: null, createdAt: new Date() },
+      { name: 'Andi Wijaya', email: 'andi@panca.test', password: 'password', role: 'employee', positionId: 2, joinDate: new Date('2020-06-15'), phone: '081234567896', address: '42 Diponegoro St, Palembang', status: 'active', avatar: null, createdAt: new Date() },
+      { name: 'Rina Kusuma', email: 'rina@panca.test', password: 'password', role: 'employee', positionId: 4, joinDate: new Date('2021-09-01'), phone: '081234567897', address: '18 Kartini St, Palembang', status: 'active', avatar: null, createdAt: new Date() },
+      { name: 'Hendra Pratama', email: 'hendra@panca.test', password: 'password', role: 'employee', positionId: 5, joinDate: new Date('2022-02-20'), phone: '081234567898', address: '55 Veteran St, Palembang', status: 'active', avatar: null, createdAt: new Date() },
+      { name: 'Maya Sari', email: 'maya@panca.test', password: 'password', role: 'finance', positionId: 9, joinDate: new Date('2022-08-10'), phone: '081234567899', address: '77 Ahmad Yani St, Palembang', status: 'active', avatar: null, createdAt: new Date() },
+      { name: 'Bambang Susilo', email: 'bambang@panca.test', password: 'password', role: 'employee', positionId: 6, joinDate: new Date('2023-03-01'), phone: '081234567800', address: '99 Kolonel Atmo St, Palembang', status: 'active', avatar: null, createdAt: new Date() },
     ];
 
     usersData.forEach(u => {
@@ -396,21 +446,21 @@ export class MemStorage implements IStorage {
     }
 
     const leavesData = [
-      // Oktober 2025
-      { userId: 3, type: 'annual', startDate: '2025-10-06', endDate: '2025-10-07', reason: 'Urusan keluarga di luar kota', status: 'approved', approvedBy: 1 },
-      { userId: 5, type: 'sick', startDate: '2025-10-15', endDate: '2025-10-16', reason: 'Sakit flu dan demam', status: 'approved', approvedBy: 1 },
-      { userId: 8, type: 'other', startDate: '2025-10-20', endDate: '2025-10-20', reason: 'Menghadiri wisuda saudara', status: 'approved', approvedBy: 1 },
+      // October 2025
+      { userId: 3, type: 'annual', startDate: '2025-10-06', endDate: '2025-10-07', reason: 'Family matters out of town', status: 'approved', approvedBy: 1 },
+      { userId: 5, type: 'sick', startDate: '2025-10-15', endDate: '2025-10-16', reason: 'Flu and fever', status: 'approved', approvedBy: 1 },
+      { userId: 8, type: 'other', startDate: '2025-10-20', endDate: '2025-10-20', reason: 'Attending sibling\'s graduation', status: 'approved', approvedBy: 1 },
       // November 2025
-      { userId: 2, type: 'annual', startDate: '2025-11-03', endDate: '2025-11-05', reason: 'Cuti tahunan - liburan keluarga', status: 'approved', approvedBy: 1 },
-      { userId: 4, type: 'sick', startDate: '2025-11-12', endDate: '2025-11-13', reason: 'Sakit gigi dan perlu perawatan', status: 'approved', approvedBy: 1 },
-      { userId: 7, type: 'annual', startDate: '2025-11-24', endDate: '2025-11-26', reason: 'Cuti acara pernikahan keluarga', status: 'approved', approvedBy: 1 },
-      { userId: 9, type: 'other', startDate: '2025-11-28', endDate: '2025-11-28', reason: 'Mengurus dokumen penting', status: 'approved', approvedBy: 1 },
-      // Desember 2025
-      { userId: 3, type: 'annual', startDate: '2025-12-08', endDate: '2025-12-10', reason: 'Liburan akhir tahun', status: 'approved', approvedBy: 1 },
-      { userId: 6, type: 'annual', startDate: '2025-12-15', endDate: '2025-12-17', reason: 'Mudik akhir tahun', status: 'approved', approvedBy: 1 },
-      { userId: 10, type: 'annual', startDate: '2025-12-22', endDate: '2025-12-26', reason: 'Cuti natal dan tahun baru', status: 'approved', approvedBy: 1 },
-      { userId: 11, type: 'annual', startDate: '2025-12-29', endDate: '2025-12-31', reason: 'Cuti akhir tahun', status: 'pending' },
-      { userId: 5, type: 'other', startDate: '2025-12-24', endDate: '2025-12-24', reason: 'Menghadiri acara gereja', status: 'pending' },
+      { userId: 2, type: 'annual', startDate: '2025-11-03', endDate: '2025-11-05', reason: 'Annual leave - family vacation', status: 'approved', approvedBy: 1 },
+      { userId: 4, type: 'sick', startDate: '2025-11-12', endDate: '2025-11-13', reason: 'Toothache and dental care', status: 'approved', approvedBy: 1 },
+      { userId: 7, type: 'annual', startDate: '2025-11-24', endDate: '2025-11-26', reason: 'Family wedding event', status: 'approved', approvedBy: 1 },
+      { userId: 9, type: 'other', startDate: '2025-11-28', endDate: '2025-11-28', reason: 'Handling important documents', status: 'approved', approvedBy: 1 },
+      // December 2025
+      { userId: 3, type: 'annual', startDate: '2025-12-08', endDate: '2025-12-10', reason: 'Year-end vacation', status: 'approved', approvedBy: 1 },
+      { userId: 6, type: 'annual', startDate: '2025-12-15', endDate: '2025-12-17', reason: 'Year-end home travel', status: 'approved', approvedBy: 1 },
+      { userId: 10, type: 'annual', startDate: '2025-12-22', endDate: '2025-12-26', reason: 'Christmas and New Year leave', status: 'approved', approvedBy: 1 },
+      { userId: 11, type: 'annual', startDate: '2025-12-29', endDate: '2025-12-31', reason: 'Year-end leave', status: 'pending' },
+      { userId: 5, type: 'other', startDate: '2025-12-24', endDate: '2025-12-24', reason: 'Attending church event', status: 'pending' },
     ];
 
     leavesData.forEach(l => {
@@ -495,31 +545,31 @@ export class MemStorage implements IStorage {
 
     const configData = [
       // Company Info
-      { key: 'companyName', value: 'PT Panca Karya Utama', description: 'Nama perusahaan' },
-      { key: 'companyAddress', value: 'Jl. Konstruksi No. 123, Palembang, Sumatera Selatan', description: 'Alamat perusahaan' },
-      { key: 'companyPhone', value: '+62 711 123456', description: 'Telepon perusahaan' },
-      { key: 'companyEmail', value: 'info@pancakaryautama.co.id', description: 'Email perusahaan' },
-      { key: 'companyWebsite', value: 'www.pancakaryautama.co.id', description: 'Website perusahaan' },
-      { key: 'vision', value: 'Menjadi perusahaan konstruksi terkemuka dan terpercaya di Indonesia yang mengutamakan kualitas, inovasi, dan kepuasan pelanggan.', description: 'Visi perusahaan' },
-      { key: 'mission', value: 'Memberikan layanan konstruksi berkualitas tinggi dengan mengutamakan keselamatan kerja, ketepatan waktu, dan efisiensi biaya.', description: 'Misi perusahaan' },
-      { key: 'history', value: 'PT Panca Karya Utama didirikan pada tahun 2010 di Palembang. Berawal dari sebuah kontraktor kecil, perusahaan telah berkembang menjadi salah satu kontraktor terkemuka di Sumatera Selatan dengan berbagai proyek besar di bidang konstruksi sipil, gedung, dan infrastruktur.', description: 'Sejarah perusahaan' },
+      { key: 'companyName', value: 'PT Panca Karya Utama', description: 'Company name' },
+      { key: 'companyAddress', value: '123 Construction St, Palembang, South Sumatra', description: 'Company address' },
+      { key: 'companyPhone', value: '+62 711 123456', description: 'Company phone' },
+      { key: 'companyEmail', value: 'info@pancakaryautama.co.id', description: 'Company email' },
+      { key: 'companyWebsite', value: 'www.pancakaryautama.co.id', description: 'Company website' },
+      { key: 'vision', value: 'To be a leading and trusted construction company in Indonesia, prioritizing quality, innovation, and customer satisfaction.', description: 'Company vision' },
+      { key: 'mission', value: 'Providing high-quality construction services with a focus on safety, punctuality, and cost efficiency.', description: 'Company mission' },
+      { key: 'history', value: 'PT Panca Karya Utama was founded in 2010 in Palembang. Starting as a small contractor, the company has grown into a leading contractor in South Sumatra with various major projects in civil construction, buildings, and infrastructure.', description: 'Company history' },
       // Geofence Settings
-      { key: 'officeLat', value: '-2.9795731113284303', description: 'Latitude kantor untuk geofence' },
-      { key: 'officeLng', value: '104.73111003716011', description: 'Longitude kantor untuk geofence' },
-      { key: 'geofenceRadius', value: '100', description: 'Radius geofence dalam meter' },
+      { key: 'officeLat', value: '-2.9795731113284303', description: 'Office latitude for geofence' },
+      { key: 'officeLng', value: '104.73111003716011', description: 'Office longitude for geofence' },
+      { key: 'geofenceRadius', value: '100', description: 'Geofence radius in meters' },
       // Work Schedule Settings
-      { key: 'work_start_time', value: '08:00', description: 'Jam mulai kerja (HH:MM)' },
-      { key: 'work_end_time', value: '17:00', description: 'Jam selesai kerja (HH:MM)' },
-      { key: 'late_tolerance_minutes', value: '10', description: 'Toleransi keterlambatan dalam menit' },
-      { key: 'break_duration_minutes', value: '60', description: 'Durasi istirahat dalam menit' },
+      { key: 'work_start_time', value: '08:00', description: 'Work start time (HH:MM)' },
+      { key: 'work_end_time', value: '17:00', description: 'Work end time (HH:MM)' },
+      { key: 'late_tolerance_minutes', value: '10', description: 'Late tolerance in minutes' },
+      { key: 'break_duration_minutes', value: '60', description: 'Break duration in minutes' },
       // Overtime Rates
-      { key: 'overtime_rate_first_hour', value: '1.5', description: 'Multiplier lembur jam pertama' },
-      { key: 'overtime_rate_next_hours', value: '2.0', description: 'Multiplier lembur jam berikutnya' },
+      { key: 'overtime_rate_first_hour', value: '1.5', description: 'First hour overtime multiplier' },
+      { key: 'overtime_rate_next_hours', value: '2.0', description: 'Subsequent hours overtime multiplier' },
       // Deduction Rates
-      { key: 'late_penalty_per_minute', value: '2000', description: 'Potongan keterlambatan per menit (Rupiah)' },
-      { key: 'bpjs_kesehatan_rate', value: '0.01', description: 'Rate BPJS Kesehatan (1%)' },
-      { key: 'bpjs_ketenagakerjaan_rate', value: '0.02', description: 'Rate BPJS Ketenagakerjaan JHT (2%)' },
-      { key: 'pph21_rate', value: '0.05', description: 'Rate PPh 21 (5%)' },
+      { key: 'late_penalty_per_minute', value: '2000', description: 'Late penalty per minute (Rupiah)' },
+      { key: 'bpjs_kesehatan_rate', value: '0.01', description: 'Health Insurance Rate (1%)' },
+      { key: 'bpjs_ketenagakerjaan_rate', value: '0.02', description: 'Labor Insurance Rate JHT (2%)' },
+      { key: 'pph21_rate', value: '0.05', description: 'Income Tax Rate PPh 21 (5%)' },
     ];
 
     configData.forEach(c => {
@@ -541,8 +591,9 @@ export class MemStorage implements IStorage {
   }
 
   async createUser(user: InsertUser): Promise<User> {
+    const hashedPassword = await bcrypt.hash(user.password, 10);
     const id = this.nextUserId++;
-    const newUser = { ...user, id } as User;
+    const newUser = { ...user, id, password: hashedPassword } as User;
     this.users.set(id, newUser);
     return newUser;
   }
@@ -550,7 +601,11 @@ export class MemStorage implements IStorage {
   async updateUser(id: number, userData: Partial<InsertUser>): Promise<User | undefined> {
     const user = this.users.get(id);
     if (!user) return undefined;
-    const updated = { ...user, ...userData };
+    const updateData = { ...userData };
+    if (updateData.password) {
+      updateData.password = await bcrypt.hash(updateData.password, 10);
+    }
+    const updated = { ...user, ...updateData };
     this.users.set(id, updated);
     return updated;
   }
@@ -652,7 +707,7 @@ export class MemStorage implements IStorage {
     return newLeave;
   }
 
-  async updateLeave(id: number, leaveData: Partial<InsertLeave>): Promise<Leave | undefined> {
+  async updateLeave(id: number, leaveData: Partial<Leave>): Promise<Leave | undefined> {
     const leave = this.leaves.get(id);
     if (!leave) return undefined;
     const updated = { ...leave, ...leaveData };
@@ -745,6 +800,41 @@ export class MemStorage implements IStorage {
     const newLog = { ...log, id, createdAt: new Date() } as ActivityLog;
     this.activityLogsStore.set(id, newLog);
     return newLog;
+  }
+
+  async getOvertimeRequests(): Promise<OvertimeRequest[]> {
+    return Array.from(this.overtimeRequestsStore.values()).sort((a, b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+  }
+
+  async getOvertimeRequestsByUser(userId: number): Promise<OvertimeRequest[]> {
+    return Array.from(this.overtimeRequestsStore.values())
+      .filter(r => r.userId === userId)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }
+
+  async getOvertimeRequest(id: number): Promise<OvertimeRequest | undefined> {
+    return this.overtimeRequestsStore.get(id);
+  }
+
+  async createOvertimeRequest(request: InsertOvertimeRequest): Promise<OvertimeRequest> {
+    const id = this.nextOvertimeRequestId++;
+    const newReq = { ...request, id, createdAt: new Date() } as OvertimeRequest;
+    this.overtimeRequestsStore.set(id, newReq);
+    return newReq;
+  }
+
+  async updateOvertimeRequest(id: number, requestData: Partial<OvertimeRequest>): Promise<OvertimeRequest | undefined> {
+    const req = this.overtimeRequestsStore.get(id);
+    if (!req) return undefined;
+    const updated = { ...req, ...requestData };
+    this.overtimeRequestsStore.set(id, updated);
+    return updated;
+  }
+
+  async deleteOvertimeRequest(id: number): Promise<boolean> {
+    return this.overtimeRequestsStore.delete(id);
   }
 }
 

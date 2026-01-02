@@ -12,6 +12,8 @@ import AdminAttendance from "@/pages/admin-attendance";
 import AdminLeaves from "@/pages/admin-leaves";
 import AdminSettings from "@/pages/admin-settings";
 import AdminReports from "@/pages/admin-reports";
+import AdminOvertime from "@/pages/admin-overtime";
+import EmployeeOvertime from "@/pages/employee-overtime";
 import PayrollList from "@/pages/payroll-list";
 import PayrollSlip from "@/pages/payroll-slip";
 import AttendanceCapture from "@/pages/attendance-capture";
@@ -33,6 +35,7 @@ function Router() {
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/admin/employees" component={AdminEmployees} />
         <Route path="/admin/attendance" component={AdminAttendance} />
+        <Route path="/admin/overtime" component={AdminOvertime} />
         <Route path="/admin/leaves" component={AdminLeaves} />
         <Route path="/admin/payroll" component={PayrollList} />
         <Route path="/admin/payroll/:id" component={PayrollSlip} />
@@ -42,10 +45,14 @@ function Router() {
         {/* Employee Routes */}
         <Route path="/employee" component={EmployeeDashboard} />
         <Route path="/employee/attendance" component={AttendanceCapture} />
+        <Route path="/employee/overtime" component={EmployeeOvertime} />
         <Route path="/employee/leave" component={EmployeeLeave} />
         <Route path="/employee/payslips" component={EmployeePayslips} />
         <Route path="/employee/payslips/:id" component={PayrollSlip} />
 
+        {/* Finance Routes */}
+        <Route path="/finance" component={AdminDashboard} />
+        
         {/* Shared */}
         <Route path="/profile" component={ProfilePage} />
         <Route path="/about" component={AboutCompany} />

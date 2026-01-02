@@ -5,7 +5,7 @@ import { apiRequest } from "./queryClient";
 
 // --- Types ---
 
-export type Role = "admin" | "employee";
+export type Role = "admin" | "employee" | "finance";
 
 export interface User {
   id: number;
@@ -53,6 +53,18 @@ export interface LeaveRequest {
   status: "pending" | "approved" | "rejected";
   attachment?: string | null;
   approvedBy?: number | null;
+}
+
+export interface OvertimeRequest {
+  id: number;
+  userId: number;
+  date: string;
+  durationMinutes: number;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  approvedBy?: number | null;
+  approvedAt?: string | null;
+  createdAt?: string;
 }
 
 export interface PayrollRecord {
@@ -150,6 +162,7 @@ function deg2rad(deg: number) {
 function normalizeAttendance(record: any): AttendanceRecord {
   return {
     ...record,
+    userId: record.userId || record.user_id,
     date: typeof record.date === 'string' ? record.date.split('T')[0] : record.date,
     clockIn: record.clockIn || record.clock_in,
     clockOut: record.clockOut || record.clock_out,
@@ -157,8 +170,14 @@ function normalizeAttendance(record: any): AttendanceRecord {
     clockOutPhoto: record.clockOutPhoto || record.clock_out_photo,
     isWithinGeofenceIn: record.isWithinGeofenceIn ?? record.is_within_geofence_in ?? false,
     isWithinGeofenceOut: record.isWithinGeofenceOut ?? record.is_within_geofence_out ?? false,
-    clockInLocation: record.clockInLat ? { lat: parseFloat(record.clockInLat), lng: parseFloat(record.clockInLng) } : undefined,
-    clockOutLocation: record.clockOutLat ? { lat: parseFloat(record.clockOutLat), lng: parseFloat(record.clockOutLng) } : undefined,
+    clockInLocation: (record.clockInLat || record.clock_in_lat) ? { 
+      lat: parseFloat(record.clockInLat || record.clock_in_lat), 
+      lng: parseFloat(record.clockInLng || record.clock_in_lng) 
+    } : undefined,
+    clockOutLocation: (record.clockOutLat || record.clock_out_lat) ? { 
+      lat: parseFloat(record.clockOutLat || record.clock_out_lat), 
+      lng: parseFloat(record.clockOutLng || record.clock_out_lng) 
+    } : undefined,
     approvalStatus: record.approvalStatus || record.approval_status || 'pending',
   };
 }
@@ -184,15 +203,29 @@ function normalizePayroll(record: any): PayrollRecord {
 function normalizeLeave(record: any): LeaveRequest {
   return {
     ...record,
+    userId: record.userId || record.user_id,
     startDate: typeof record.startDate === 'string' ? record.startDate.split('T')[0] : 
                typeof record.start_date === 'string' ? record.start_date.split('T')[0] : record.startDate,
     endDate: typeof record.endDate === 'string' ? record.endDate.split('T')[0] : 
              typeof record.end_date === 'string' ? record.end_date.split('T')[0] : record.endDate,
     approvedBy: record.approvedBy || record.approved_by,
+    approvedAt: record.approvedAt || record.approved_at,
   };
 }
 
-// --- Context ---
+// Helper to normalize overtime records
+function normalizeOvertime(record: any): OvertimeRequest {
+  return {
+    ...record,
+    userId: record.userId || record.user_id,
+    durationMinutes: record.durationMinutes || record.duration_minutes,
+    approvedBy: record.approvedBy || record.approved_by,
+    approvedAt: record.approvedAt || record.approved_at,
+    createdAt: record.createdAt || record.created_at,
+    date: typeof record.date === 'string' ? record.date.split('T')[0] : 
+          record.date instanceof Date ? record.date.toISOString().split('T')[0] : record.date,
+  };
+}
 
 interface AppContextType {
   user: User | null;
@@ -200,17 +233,20 @@ interface AppContextType {
   positions: JobPosition[];
   attendance: AttendanceRecord[];
   leaves: LeaveRequest[];
+  overtime: OvertimeRequest[];
   payrolls: PayrollRecord[];
   config: AppConfig;
   isLoading: boolean;
-  login: (email: string) => Promise<void>;
+  login: (email: string) => Promise<User | null>;
   logout: () => void;
   clockIn: (lat: number, lng: number, photo: string) => Promise<void>;
   clockOut: (lat: number, lng: number, photo: string) => Promise<void>;
   requestLeave: (data: Omit<LeaveRequest, "id" | "status" | "userId">) => Promise<void>;
+  requestOvertime: (data: Omit<OvertimeRequest, "id" | "status" | "userId">) => Promise<void>;
   updateConfig: (newConfig: Partial<AppConfig>) => Promise<void>;
   approveAttendance: (id: number, status: "approved" | "rejected") => Promise<void>;
   approveLeave: (id: number, status: "approved" | "rejected") => Promise<void>;
+  approveOvertime: (id: number, status: "approved" | "rejected") => Promise<void>;
   addPosition: (position: JobPosition) => Promise<void>;
   deletePosition: (id: number) => Promise<void>;
   generatePayroll: (period: string, manualBonuses?: Record<number, number>) => Promise<void>;
@@ -229,6 +265,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [positions, setPositions] = useState<JobPosition[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
+  const [overtime, setOvertime] = useState<OvertimeRequest[]>([]);
   const [payrolls, setPayrolls] = useState<PayrollRecord[]>([]);
   const [config, setConfig] = useState<AppConfig>(DEFAULT_CONFIG);
   const [isLoading, setIsLoading] = useState(true);
@@ -238,11 +275,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       setIsLoading(true);
       
-      const [usersRes, positionsRes, attendanceRes, leavesRes, payrollsRes, configRes] = await Promise.all([
+      const [usersRes, positionsRes, attendanceRes, leavesRes, overtimeRes, payrollsRes, configRes] = await Promise.all([
         fetch('/api/users').then(r => r.json()).catch(() => []),
         fetch('/api/positions').then(r => r.json()).catch(() => []),
         fetch('/api/attendance').then(r => r.json()).catch(() => []),
         fetch('/api/leaves').then(r => r.json()).catch(() => []),
+        fetch('/api/overtime').then(r => r.json()).catch(() => []),
         fetch('/api/payroll').then(r => r.json()).catch(() => []),
         fetch('/api/config').then(r => r.json()).catch(() => ({})),
       ]);
@@ -261,6 +299,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setPositions(positionsRes);
       setAttendance(attendanceRes.map(normalizeAttendance));
       setLeaves(leavesRes.map(normalizeLeave));
+      setOvertime(overtimeRes.map(normalizeOvertime));
       setPayrolls(payrollsRes.map(normalizePayroll));
       
       // Merge config
@@ -298,7 +337,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await fetchData();
   };
 
-  const login = async (email: string) => {
+  const login = async (email: string): Promise<User | null> => {
     try {
       const response = await apiRequest('POST', '/api/auth/login', { email, password: 'password' });
       const userData = await response.json();
@@ -312,8 +351,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       
       setUser(userWithPosition);
       toast({ title: "Welcome back!", description: `Logged in as ${userData.name}` });
+      return userWithPosition;
     } catch (error: any) {
       toast({ title: "Login Failed", description: error.message || "Invalid credentials", variant: "destructive" });
+      return null;
     }
   };
 
@@ -433,6 +474,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const requestOvertime = async (data: Omit<OvertimeRequest, "id" | "status" | "userId">) => {
+    if (!user) return;
+    
+    try {
+      await apiRequest('POST', '/api/overtime', {
+        userId: user.id,
+        ...data,
+        status: 'pending',
+      });
+      
+      await fetchData();
+      toast({ title: "Overtime Requested", description: "Waiting for approval" });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to submit overtime request", variant: "destructive" });
+    }
+  };
+
+  const approveOvertime = async (id: number, status: "approved" | "rejected") => {
+    try {
+      await apiRequest('POST', `/api/overtime/${id}/approve`, {
+        status,
+        approvedBy: user?.id,
+      });
+      
+      await fetchData();
+      toast({ title: `Overtime ${status}`, description: `Request has been ${status}.` });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to update overtime status", variant: "destructive" });
+    }
+  };
+
   const approveAttendance = async (id: number, status: "approved" | "rejected") => {
     try {
       await apiRequest('PATCH', `/api/attendance/${id}`, { approvalStatus: status });
@@ -502,6 +574,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         positions,
         attendance,
         leaves,
+        overtime,
         payrolls,
         config,
         isLoading,
@@ -510,9 +583,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         clockIn,
         clockOut,
         requestLeave,
+        requestOvertime,
         updateConfig,
         approveAttendance,
         approveLeave,
+        approveOvertime,
         addPosition,
         deletePosition,
         generatePayroll,

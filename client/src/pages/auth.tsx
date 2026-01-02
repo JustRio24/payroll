@@ -21,20 +21,22 @@ export default function AuthPage() {
     setIsLoading(true);
     
     // Simulate network delay
-    setTimeout(() => {
-      login(email);
-      const user = users.find(u => u.email === email);
-      if (user) {
-        if (user.role === "admin") setLocation("/admin");
+    setTimeout(async () => {
+      const result = await login(email);
+      if (result) {
+        if (result.role === "admin") setLocation("/admin");
+        else if (result.role === "finance") setLocation("/finance");
         else setLocation("/employee");
       }
       setIsLoading(false);
     }, 800);
   };
 
-  const fillCredentials = (role: "admin" | "employee") => {
+  const fillCredentials = (role: "admin" | "employee" | "finance") => {
     if (role === "admin") {
       setEmail("admin@panca.test");
+    } else if (role === "finance") {
+      setEmail("finance@panca.test");
     } else {
       setEmail("budi@panca.test");
     }
@@ -102,12 +104,15 @@ export default function AuthPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 mt-4">
-                <Button variant="outline" onClick={() => fillCredentials("admin")} className="flex items-center gap-2">
-                  <Building2 className="w-4 h-4" /> Admin
+              <div className="grid grid-cols-3 gap-2 mt-4">
+                <Button variant="outline" onClick={() => fillCredentials("admin")} className="flex items-center gap-1 text-xs px-2">
+                  <Building2 className="w-3 h-3" /> Admin
                 </Button>
-                <Button variant="outline" onClick={() => fillCredentials("employee")} className="flex items-center gap-2">
-                  <UserCircle2 className="w-4 h-4" /> Employee
+                <Button variant="outline" onClick={() => fillCredentials("employee")} className="flex items-center gap-1 text-xs px-2">
+                  <UserCircle2 className="w-3 h-3" /> Employee
+                </Button>
+                <Button variant="outline" onClick={() => fillCredentials("finance")} className="flex items-center gap-1 text-xs px-2">
+                  <Building2 className="w-3 h-3" /> Finance
                 </Button>
               </div>
           </div>
